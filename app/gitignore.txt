@@ -1,0 +1,19 @@
+# Fitxers de compilació i temporals
+build/
+.gradle/
+captures/
+*.iml
+
+# Configuració local de l'IDE
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+
+# Fitxers de sistema i claus privades
+local.properties
+.DS_Store
+*.keystore
+*.jks

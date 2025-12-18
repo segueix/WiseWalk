@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#f8f6f1">
+  <title>WiseWalk</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300;8..144,400;8..144,500;8..144,700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#f8f6f1;--bg-card:#fff;--text:#2d3a3a;--text-soft:#5a6b6b;--accent:#3d7a6b;--accent-light:#e8f2ef;--accent-warm:#d4a574;--water:#4a90d9;--water-light:#e3f0fc;--cat:#d35400;--cat-light:#fdebd0;--border:#e0ddd5;--shadow:rgba(45,58,58,.08);--input-bg:#f8f6f1;--toggle-bg:#e0ddd5;--danger:#d9534f;--danger-light:#fdeaea;--gold:#f4d03f;--silver:#bdc3c7;--bronze:#cd6133}
+    [data-theme="dark"]{--bg:#1a1d1d;--bg-card:#252a2a;--text:#e8e6e1;--text-soft:#9ca8a8;--accent:#5cb89f;--accent-light:#2a3d38;--accent-warm:#e4b584;--water:#6ba3e0;--water-light:#2a3a4a;--cat:#e67e22;--cat-light:#3a2d1a;--border:#3a4040;--shadow:rgba(0,0,0,.3);--input-bg:#1a1d1d;--toggle-bg:#3a4040;--danger:#e57373;--danger-light:#3a2a2a}
+    /* Color themes */
+    [data-color="green"]{--accent:#3d7a6b;--accent-light:#e8f2ef}[data-color="green"][data-theme="dark"]{--accent:#5cb89f;--accent-light:#2a3d38}
+    [data-color="blue"]{--accent:#4a7a9b;--accent-light:#e3eef5}[data-color="blue"][data-theme="dark"]{--accent:#6ba3d9;--accent-light:#2a3545}
+    [data-color="purple"]{--accent:#7a5a8b;--accent-light:#f0e8f4}[data-color="purple"][data-theme="dark"]{--accent:#a87fc0;--accent-light:#3a2d42}
+    [data-color="coral"]{--accent:#c17a5a;--accent-light:#faf0eb}[data-color="coral"][data-theme="dark"]{--accent:#e09a7a;--accent-light:#3d2d28}
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html{font-size:16px}
+    body{font-family:'Roboto Flex',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6;padding:1rem;transition:background .3s,color .3s}
+    .container{max-width:420px;margin:0 auto}
+    header{text-align:center;margin-bottom:1.5rem;position:relative}
+    .header-actions{position:absolute;top:0;right:0;display:flex;gap:.5rem}
+    .header-left{position:absolute;top:0;left:0}
+    .logo{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:.25rem}
+    .logo-icon{font-size:1.6rem}
+    h1{font-family:'Roboto Flex',sans-serif;font-weight:700;font-size:1.75rem}
+    .subtitle{color:var(--text-soft);font-size:.9rem;font-weight:300}
+    .icon-btn{background:var(--toggle-bg);border:none;width:44px;height:44px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.25rem;transition:all .3s}
+    .icon-btn:active{transform:scale(.95)}
+    .theme-toggle .icon-sun,.theme-toggle .icon-moon{position:absolute;transition:opacity .3s,transform .3s}
+    .theme-toggle .icon-moon{opacity:0;transform:rotate(-90deg)}
+    [data-theme="dark"] .theme-toggle .icon-sun{opacity:0;transform:rotate(90deg)}
+    [data-theme="dark"] .theme-toggle .icon-moon{opacity:1;transform:rotate(0)}
+    .card{background:var(--bg-card);border-radius:20px;padding:1.5rem;box-shadow:0 4px 24px var(--shadow);margin-bottom:1rem;transition:background .3s}
+    .form-group{margin-bottom:1.25rem}
+    label{display:block;font-weight:500;margin-bottom:.5rem;font-size:.9rem}
+    .input-wrapper{position:relative}
+    input[type="number"],input[type="time"]{width:100%;padding:1rem 3.5rem 1rem 1.2rem;border:2px solid var(--border);border-radius:14px;font-size:1.1rem;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text);-webkit-appearance:none;-moz-appearance:textfield}
+    input[type="time"]{padding-right:1.2rem}
+    input:focus{outline:none;border-color:var(--accent);background:var(--bg-card)}
+    .unit{position:absolute;right:1.2rem;top:50%;transform:translateY(-50%);color:var(--text-soft);font-size:.9rem;pointer-events:none}
+    .time-inputs{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+    .sex-selector{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+    .sex-option{position:relative}
+    .sex-option input{position:absolute;opacity:0}
+    .sex-option label{display:flex;flex-direction:column;align-items:center;padding:.85rem .5rem;background:var(--input-bg);border:2px solid var(--border);border-radius:14px;cursor:pointer;transition:all .2s;margin:0}
+    .sex-option input:checked+label{border-color:var(--accent);background:var(--accent-light)}
+    .sex-icon{font-size:1.5rem;margin-bottom:.15rem}
+    .sex-label{font-size:.8rem;color:var(--text-soft)}
+    .sex-option input:checked+label .sex-label{color:var(--accent);font-weight:500}
+    .btn{width:100%;padding:1rem;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:1.05rem;font-weight:600;font-family:'Roboto Flex',sans-serif;cursor:pointer;transition:all .2s;margin-top:1rem;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .btn:active{transform:scale(.98)}
+    .btn-secondary{background:var(--toggle-bg);color:var(--text)}
+    .btn-small{padding:.75rem;font-size:.95rem;margin-top:.75rem}
+    .btn-cat{background:var(--cat)}
+    .result-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;padding-bottom:.85rem;border-bottom:1px solid var(--border)}
+    .result-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;background:var(--accent-light)}
+    .result-icon.water{background:var(--water-light)}
+    .result-icon.cat{background:var(--cat-light)}
+    .result-title{font-family:'Roboto Flex',sans-serif;font-weight:700;font-size:1.15rem}
+    .result-subtitle{font-size:.8rem;color:var(--text-soft)}
+    .metrics{display:grid;grid-template-columns:1fr 1fr;gap:.65rem}
+    .metric{text-align:center;padding:.75rem .4rem;background:var(--input-bg);border-radius:12px}
+    .metric-value{font-family:'Roboto Flex',sans-serif;font-size:1.4rem;font-weight:700;color:var(--accent)}
+    .metric-value.water{color:var(--water)}
+    .metric-value.cat{color:var(--cat)}
+    .metric-label{font-size:.7rem;color:var(--text-soft);margin-top:.15rem}
+    .metric.metric-goal{background:linear-gradient(135deg,var(--accent-light),transparent);border:1px solid var(--accent);grid-column:1/-1}
+    .metric-goal .metric-value{font-size:1.8rem}
+    .progress-container{margin-top:1rem;padding:1rem;background:var(--input-bg);border-radius:14px}
+    .progress-container.water{background:var(--water-light)}
+    .progress-container.cat{background:var(--cat-light)}
+    .progress-header{display:flex;justify-content:space-between;margin-bottom:.5rem;font-size:.85rem}
+    .progress-bar{height:12px;background:var(--border);border-radius:6px;overflow:hidden}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-warm));border-radius:6px;transition:width .5s;width:0}
+    .progress-fill.water{background:linear-gradient(90deg,var(--water),#6bc5d9)}
+    .progress-fill.cat{background:linear-gradient(90deg,var(--cat),#e74c3c)}
+    .screen{display:none}
+    .screen.active{display:block}
+    .setup-welcome{text-align:center;padding:1rem 0}
+    .setup-welcome h2{font-family:'Roboto Flex',sans-serif;font-size:1.5rem;margin-bottom:.5rem;font-weight:700}
+    .summary-box{background:var(--accent-light);border-radius:12px;padding:1rem;margin-bottom:1rem}
+    .summary-row{display:flex;justify-content:space-between;padding:.25rem 0;font-size:.9rem}
+    .summary-row span:first-child{color:var(--text-soft)}
+    .summary-row span:last-child{font-weight:600}
+    .note{margin-top:1rem;padding:1rem;background:var(--accent-light);border-radius:14px;font-size:.8rem;color:var(--text-soft)}
+    .note strong{color:var(--text)}
+    footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
+    .status-indicator{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:var(--accent-light);border-radius:8px;font-size:.8rem;margin-top:.75rem}
+    .status-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    .status-indicator.inactive .status-dot{background:var(--text-soft);animation:none}
+    .water-quick-add{display:flex;gap:.5rem;margin-top:.75rem}
+    .water-btn{flex:1;padding:.6rem;background:var(--water-light);border:2px solid var(--water);border-radius:10px;font-family:'Roboto Flex',sans-serif;font-size:.9rem;font-weight:600;color:var(--water);cursor:pointer;transition:all .2s}
+    .water-btn:active{transform:scale(.95);background:var(--water);color:#fff}
+    .water-schedule{margin-top:1rem;font-size:.85rem;background:var(--water-light);border-radius:12px;padding:1rem}
+    .water-schedule-title{font-weight:600;margin-bottom:.75rem;color:var(--water)}
+    .water-schedule-item{display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid var(--border)}
+    .water-schedule-item:last-child{border-bottom:none}
+    .history-list{margin-top:.75rem}
+    .history-item{display:flex;align-items:center;padding:.75rem;background:var(--input-bg);border-radius:12px;margin-bottom:.5rem;gap:.75rem}
+    .history-date{min-width:60px}
+    .history-date-day{font-family:'Roboto Flex',sans-serif;font-size:1.2rem;font-weight:700;color:var(--accent);line-height:1}
+    .history-date-month{font-size:.7rem;color:var(--text-soft);text-transform:uppercase}
+    .history-stats{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:.25rem;font-size:.75rem}
+    .history-stat{text-align:center}
+    .history-stat-value{font-weight:600}
+    .history-stat-label{color:var(--text-soft);font-size:.65rem}
+    .history-delete{background:none;border:none;color:var(--text-soft);cursor:pointer;padding:.5rem;border-radius:8px}
+    .history-empty{text-align:center;padding:2rem;color:var(--text-soft);font-size:.9rem}
+    .tabs{display:flex;gap:.25rem;background:var(--input-bg);padding:.25rem;border-radius:12px;margin-bottom:1rem}
+    .tab{flex:1;padding:.6rem;border:none;background:transparent;border-radius:10px;font-family:'Roboto Flex',sans-serif;font-size:.85rem;font-weight:500;color:var(--text-soft);cursor:pointer}
+    .tab.active{background:var(--bg-card);color:var(--accent);box-shadow:0 2px 8px var(--shadow)}
+    
+    /* Volta Catalunya styles */
+    .comarca-current{background:linear-gradient(135deg,var(--cat-light),transparent);border:2px solid var(--cat);border-radius:14px;padding:1rem;margin-bottom:1rem}
+    .comarca-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
+    .comarca-emoji{font-size:2rem}
+    .comarca-name{font-weight:700;font-size:1.1rem}
+    .comarca-capital{font-size:.85rem;color:var(--text-soft)}
+    .comarca-curiosity{font-size:.85rem;font-style:italic;color:var(--text-soft);margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border)}
+    .comarca-next{background:var(--input-bg);border-radius:14px;padding:1rem;margin-bottom:1rem}
+    .comarca-next-label{font-size:.75rem;color:var(--text-soft);margin-bottom:.25rem}
+    .comarca-next-name{font-weight:600;display:flex;align-items:center;gap:.5rem}
+    .xp-bar{margin-top:1rem}
+    .xp-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+    .xp-level{font-weight:700;color:var(--cat)}
+    .xp-points{font-size:.85rem;color:var(--text-soft)}
+    .badges-container{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}
+    .badge{display:flex;align-items:center;gap:.35rem;padding:.4rem .7rem;background:var(--input-bg);border-radius:20px;font-size:.8rem}
+    .badge.earned{background:var(--cat-light);border:1px solid var(--cat)}
+    .badge.locked{opacity:.4}
+    .badge-icon{font-size:1rem}
+    .comarca-info{margin-top:.75rem;font-size:.85rem}
+    .comarca-info-item{display:flex;justify-content:space-between;padding:.3rem 0}
+    .comarca-info-label{color:var(--text-soft)}
+    .comarca-info-value{font-weight:500}
+    .volta-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.75rem}
+    .volta-stat{text-align:center;padding:.5rem;background:var(--input-bg);border-radius:8px}
+    .volta-stat-value{font-weight:700;color:var(--cat);font-size:1.1rem}
+    .volta-stat-label{font-size:.65rem;color:var(--text-soft)}
+    .route-info{font-size:.8rem;color:var(--text-soft);text-align:center;margin-top:.5rem}
+    .celebration{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:1000;display:none}
+    .celebration.active{display:flex}
+    .celebration-content{background:var(--bg-card);border-radius:20px;padding:2rem;text-align:center;max-width:320px;margin:1rem}
+    .celebration-emoji{font-size:4rem;margin-bottom:1rem}
+    .celebration-title{font-weight:700;font-size:1.3rem;margin-bottom:.5rem}
+    .celebration-text{color:var(--text-soft);margin-bottom:1rem}
+    /* Color selector */
+    .color-selector{display:flex;justify-content:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--input-bg);border-radius:14px}
+    .color-option{width:48px;height:48px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .2s;position:relative}
+    .color-option:hover{transform:scale(1.1)}
+    .color-option.active{border-color:var(--text);box-shadow:0 0 0 3px var(--bg-card)}
+    .color-option.active::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-weight:bold;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+    .color-green{background:linear-gradient(135deg,#3d7a6b,#5cb89f)}
+    .color-blue{background:linear-gradient(135deg,#4a7a9b,#6ba3d9)}
+    .color-purple{background:linear-gradient(135deg,#7a5a8b,#a87fc0)}
+    .color-coral{background:linear-gradient(135deg,#c17a5a,#e09a7a)}
+    /* Random route */
+    .route-container{margin-top:.75rem;padding:1rem;background:var(--input-bg);border-radius:14px}
+    .route-details{display:flex;justify-content:space-around;padding:.75rem;background:var(--accent-light);border-radius:10px;margin-bottom:.75rem}
+    .route-detail{text-align:center}
+    .route-detail-value{font-weight:700;color:var(--accent);font-size:1.1rem}
+    .route-detail-label{font-size:.7rem;color:var(--text-soft)}
+    .route-info-text{font-size:.85rem;color:var(--text-soft);text-align:center;padding:.5rem}
+    /* ===== CAMÍ DE MUNTANYA ===== */
+    .path-container{position:relative;height:320px;overflow:hidden;border-radius:14px;margin:.75rem 0}
+    .path-scroll{position:absolute;bottom:0;left:0;right:0;transition:transform .5s ease-out}
+    .path-biome{padding:20px 0;position:relative}
+    .biome-metro{background:linear-gradient(180deg,#e8e8e8 0%,#d0d0d0 100%)}
+    .biome-camp{background:linear-gradient(180deg,#c8e6c9 0%,#a5d6a7 100%)}
+    .biome-pirineu{background:linear-gradient(180deg,#bbdefb 0%,#e3f2fd 100%)}
+    .biome-costa{background:linear-gradient(180deg,#b3e5fc 0%,#fff9c4 100%)}
+    .biome-interior{background:linear-gradient(180deg,#d7ccc8 0%,#bcaaa4 100%)}
+    .biome-volca{background:linear-gradient(180deg,#a5d6a7 0%,#6d4c41 100%)}
+    [data-theme="dark"] .biome-metro{background:linear-gradient(180deg,#37474f 0%,#263238 100%)}
+    [data-theme="dark"] .biome-camp{background:linear-gradient(180deg,#2e7d32 0%,#1b5e20 100%)}
+    [data-theme="dark"] .biome-pirineu{background:linear-gradient(180deg,#1565c0 0%,#0d47a1 100%)}
+    [data-theme="dark"] .biome-costa{background:linear-gradient(180deg,#0277bd 0%,#f9a825 100%)}
+    [data-theme="dark"] .biome-interior{background:linear-gradient(180deg,#5d4037 0%,#3e2723 100%)}
+    [data-theme="dark"] .biome-volca{background:linear-gradient(180deg,#33691e 0%,#4e342e 100%)}
+    .path-row{display:flex;align-items:center;justify-content:center;height:70px;position:relative}
+    .path-node{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.3rem;background:var(--bg-card);border:3px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.15);position:relative;z-index:2;transition:all .3s}
+    .path-node.visited{border-color:var(--cat);background:var(--cat-light)}
+    .path-node.current{border-color:var(--cat);background:var(--cat);animation:pulse-node 1.5s infinite}
+    .path-node.locked{opacity:.5;filter:grayscale(1)}
+    .path-node.reward{width:32px;height:32px;font-size:.9rem;background:var(--gold);border-color:var(--gold)}
+    .path-node.reward.collected{background:var(--toggle-bg);border-color:var(--border);opacity:.6}
+    @keyframes pulse-node{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(0,0,0,.15)}50%{transform:scale(1.1);box-shadow:0 4px 16px rgba(211,84,0,.4)}}
+    .path-line{position:absolute;height:3px;background:var(--border);z-index:1}
+    .path-line.visited{background:var(--cat)}
+    .path-line-v{width:3px;height:40px;position:absolute;left:50%;transform:translateX(-50%)}
+    .path-deco{position:absolute;font-size:1.2rem;opacity:.7;pointer-events:none}
+    .path-label{position:absolute;font-size:.65rem;color:var(--text);font-weight:600;white-space:nowrap;background:var(--bg-card);padding:2px 6px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+    .path-km-marker{position:absolute;right:10px;font-size:.7rem;color:var(--text-soft);background:var(--bg-card);padding:2px 8px;border-radius:10px}
+    /* Pixel Walker 16x16 */
+    .pixel-walker{width:32px;height:32px;position:absolute;z-index:10;image-rendering:pixelated;transition:left .3s,bottom .3s}
+    .walker-sprite{width:32px;height:32px;background-size:64px 32px;animation:walk .4s steps(2) infinite}
+    @keyframes walk{from{background-position:0 0}to{background-position:-64px 0}}
+    .path-stats{display:flex;justify-content:space-around;padding:.75rem;background:var(--input-bg);border-radius:10px;margin-top:.5rem}
+    .path-stat{text-align:center}
+    .path-stat-value{font-weight:700;color:var(--cat)}
+    .path-stat-label{font-size:.7rem;color:var(--text-soft)}
+    /* Path detail screen */
+    .path-full-container{height:60vh;overflow-y:auto;border-radius:14px;margin:.75rem 0;position:relative}
+    .path-full-scroll{padding:20px 0}
+    .comarca-tooltip{position:fixed;background:var(--bg-card);border-radius:12px;padding:1rem;box-shadow:0 4px 20px rgba(0,0,0,.2);z-index:100;max-width:280px;display:none}
+    .comarca-tooltip.active{display:block}
+    .tooltip-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+    .tooltip-emoji{font-size:1.5rem}
+    .tooltip-name{font-weight:700}
+    .tooltip-capital{font-size:.8rem;color:var(--text-soft)}
+    .tooltip-curiosity{font-size:.85rem;margin-top:.5rem;font-style:italic}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <button class="icon-btn theme-toggle" id="themeToggle"><span class="icon-sun">☀️</span><span class="icon-moon">🌙</span></button>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btnConfig">⚙️</button>
+      </div>
+      <div class="logo"><span class="logo-icon">🚶</span><h1>WiseWalk</h1></div>
+      <p class="subtitle">El teu objectiu diari personalitzat</p>
+    </header>
+
+    <!-- SETUP -->
+    <div id="screen-setup" class="screen">
+      <div class="card">
+        <div class="setup-welcome"><h2>👋 Benvingut!</h2><p class="subtitle">Introdueix les teves dades</p></div>
+        <form id="form-setup">
+          <div class="form-group">
+            <label>Sexe</label>
+            <div class="sex-selector">
+              <div class="sex-option"><input type="radio" name="sex-setup" id="sex-m-setup" value="M" checked><label for="sex-m-setup"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div>
+              <div class="sex-option"><input type="radio" name="sex-setup" id="sex-f-setup" value="F"><label for="sex-f-setup"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div>
+            </div>
+          </div>
+          <div class="form-group"><label for="age-setup">Edat</label><div class="input-wrapper"><input type="number" id="age-setup" inputmode="numeric" min="5" max="120" value="35" required><span class="unit">anys</span></div></div>
+          <div class="form-group"><label for="height-setup">Alçada</label><div class="input-wrapper"><input type="number" id="height-setup" inputmode="numeric" min="100" max="250" value="170" required><span class="unit">cm</span></div></div>
+          <div class="form-group"><label for="weight-setup">Pes</label><div class="input-wrapper"><input type="number" id="weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="70" required><span class="unit">kg</span></div></div>
+          <div class="form-group">
+            <label>Horari de son</label>
+            <div class="time-inputs">
+              <div><label for="wake-setup" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-setup" value="07:00" required></div>
+              <div><label for="sleep-setup" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-setup" value="23:00" required></div>
+            </div>
+          </div>
+          <button type="submit" class="btn">Calcular objectius</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="screen-main" class="screen">
+      <!-- Objectiu caminar -->
+      <section class="card" id="card-goal">
+        <div class="result-header"><div class="result-icon">🎯</div><div><div class="result-title">Objectiu d'avui</div><div class="result-subtitle" id="plan-label">Pla de manteniment</div></div></div>
+        <div class="metrics">
+          <div class="metric metric-goal"><div class="metric-value" id="goal-km">—</div><div class="metric-label">km a caminar</div></div>
+          <div class="metric"><div class="metric-value" id="goal-steps">—</div><div class="metric-label">passos/dia</div></div>
+          <div class="metric"><div class="metric-value" id="goal-min">—</div><div class="metric-label">minuts/dia</div></div>
+        </div>
+        <div class="form-group" style="margin-top:1rem;margin-bottom:0">
+          <div class="sex-selector">
+            <div class="sex-option"><input type="radio" name="activePlan" id="plan-maintain" value="maintain" checked><label for="plan-maintain"><span class="sex-icon">⚖️</span><span class="sex-label">Manteniment</span></label></div>
+            <div class="sex-option"><input type="radio" name="activePlan" id="plan-optimize" value="optimize"><label for="plan-optimize"><span class="sex-icon">🔥</span><span class="sex-label">Optimització</span></label></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Seguiment caminar -->
+      <section class="card" id="card-tracking">
+        <div class="result-header"><div class="result-icon">👣</div><div><div class="result-title">Seguiment d'avui</div><div class="result-subtitle">Progrés en temps real</div></div></div>
+        <div class="metrics" style="margin-top:.75rem">
+          <div class="metric"><div class="metric-value" id="t-steps">0</div><div class="metric-label">passos</div></div>
+          <div class="metric"><div class="metric-value" id="t-km">0</div><div class="metric-label">km</div></div>
+          <div class="metric"><div class="metric-value" id="t-min">0</div><div class="metric-label">minuts</div></div>
+          <div class="metric"><div class="metric-value" id="t-kcal">0</div><div class="metric-label">kcal</div></div>
+        </div>
+        <div class="progress-container"><div class="progress-header"><span>Progrés caminar</span><span id="progress-pct">0%</span></div><div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div></div>
+        <div class="status-indicator" id="tracking-status"><div class="status-dot"></div><span id="status-text">Comptant passos</span></div>
+      </section>
+
+      <!-- RUTA ALEATÒRIA -->
+      <section class="card" id="card-route">
+        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km</div></div></div>
+        <div class="route-container">
+          <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
+          <div class="route-details" id="route-details" style="display:none">
+            <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
+            <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps estimat</div></div>
+          </div>
+          <button class="btn btn-small" id="btn-generate-route">🎲 Generar ruta</button>
+          <button class="btn btn-secondary btn-small" id="btn-open-maps" style="display:none">📍 Obrir a Google Maps</button>
+        </div>
+      </section>
+
+      <!-- VOLTA A CATALUNYA - CAMÍ DE MUNTANYA -->
+      <section class="card" id="card-volta">
+        <div class="result-header"><div class="result-icon cat">🏴󠁥󠁳󠁣󠁴󠁿</div><div><div class="result-title">Volta a Catalunya</div><div class="result-subtitle" id="volta-subtitle">42 comarques per descobrir</div></div></div>
+        
+        <!-- Camí Visual -->
+        <div class="path-container" id="path-container">
+          <div class="path-scroll" id="path-scroll">
+            <!-- Es genera dinàmicament -->
+          </div>
+          <!-- Pixel Walker -->
+          <div class="pixel-walker" id="pixel-walker">
+            <svg class="walker-sprite" viewBox="0 0 16 16" style="width:32px;height:32px">
+              <rect x="6" y="0" width="4" height="4" fill="#f4d03f"/>
+              <rect x="5" y="4" width="6" height="5" fill="#e74c3c"/>
+              <rect x="4" y="9" width="3" height="4" fill="#3498db"/>
+              <rect x="9" y="9" width="3" height="4" fill="#3498db"/>
+              <rect x="4" y="13" width="3" height="3" fill="#8b4513"/>
+              <rect x="9" y="13" width="3" height="3" fill="#8b4513"/>
+            </svg>
+          </div>
+        </div>
+        
+        <!-- Stats compactes -->
+        <div class="path-stats">
+          <div class="path-stat"><div class="path-stat-value" id="volta-km">0</div><div class="path-stat-label">km totals</div></div>
+          <div class="path-stat"><div class="path-stat-value" id="volta-comarques">0/42</div><div class="path-stat-label">comarques</div></div>
+          <div class="path-stat"><div class="path-stat-value" id="volta-xp">0</div><div class="path-stat-label">XP</div></div>
+          <div class="path-stat"><div class="path-stat-value" id="volta-level">1</div><div class="path-stat-label">nivell</div></div>
+        </div>
+        
+        <!-- Comarca actual -->
+        <div class="comarca-current" id="comarca-current">
+          <div class="comarca-header">
+            <span class="comarca-emoji" id="comarca-emoji">🏛️</span>
+            <div>
+              <div class="comarca-name" id="comarca-name">Carregant...</div>
+              <div class="comarca-capital" id="comarca-capital">Capital</div>
+            </div>
+          </div>
+          <div class="comarca-curiosity" id="comarca-curiosity">...</div>
+        </div>
+        
+        <!-- Progrés cap a la següent -->
+        <div class="comarca-next" id="comarca-next-container">
+          <div class="comarca-next-label">Pròxima parada</div>
+          <div class="comarca-next-name" id="comarca-next">🎯 Carregant...</div>
+          <div class="progress-container cat" style="margin-top:.75rem;padding:.75rem">
+            <div class="progress-header"><span id="km-progress-label">0 / 0 km</span><span id="km-progress-pct">0%</span></div>
+            <div class="progress-bar"><div class="progress-fill cat" id="km-progress-fill"></div></div>
+          </div>
+        </div>
+        
+        <button class="btn btn-secondary btn-small" id="btn-volta-detail">🗺️ Veure mapa complet</button>
+      </section>
+
+      <!-- Hidratació -->
+      <section class="card" id="card-water">
+        <div class="result-header"><div class="result-icon water">💧</div><div><div class="result-title">Hidratació</div><div class="result-subtitle" id="water-goal-label">0 gots de 300ml</div></div></div>
+        <div class="metrics">
+          <div class="metric"><div class="metric-value water" id="w-glasses">0</div><div class="metric-label">gots beguts</div></div>
+          <div class="metric"><div class="metric-value water" id="w-liters">0</div><div class="metric-label">litres</div></div>
+        </div>
+        <div class="progress-container water"><div class="progress-header"><span>Progrés hidratació</span><span id="water-pct">0%</span></div><div class="progress-bar"><div class="progress-fill water" id="water-fill"></div></div></div>
+        <div class="water-quick-add">
+          <button class="water-btn" onclick="addWater(1)">+1 got</button>
+          <button class="water-btn" onclick="addWater(2)">+2 gots</button>
+          <button class="water-btn" onclick="addWater(-1)">-1</button>
+        </div>
+      </section>
+
+      <footer>Basat en recomanacions OMS i IOM<br><strong>WiseWalk</strong> © 2024</footer>
+    </div>
+
+    <!-- VOLTA DETAIL - MAPA COMPLET -->
+    <div id="screen-volta" class="screen">
+      <section class="card">
+        <div class="result-header"><div class="result-icon cat">🗺️</div><div><div class="result-title">Mapa del Camí</div><div class="result-subtitle">Explora tota la ruta</div></div></div>
+        
+        <!-- Mapa complet amb scroll -->
+        <div class="path-full-container" id="path-full-container">
+          <div class="path-full-scroll" id="path-full-scroll">
+            <!-- Es genera dinàmicament -->
+          </div>
+        </div>
+        
+        <!-- Estadístiques -->
+        <div class="summary-box" style="background:var(--cat-light)">
+          <div class="summary-row"><span>Km recorreguts</span><span id="detail-km">0 km</span></div>
+          <div class="summary-row"><span>Comarques visitades</span><span id="detail-comarques">0 / 42</span></div>
+          <div class="summary-row"><span>Recompenses</span><span id="detail-rewards">0 ⭐</span></div>
+          <div class="summary-row"><span>XP total</span><span id="detail-xp">0 XP</span></div>
+          <div class="summary-row"><span>Nivell</span><span id="detail-level">1</span></div>
+        </div>
+        
+        <!-- Insígnies -->
+        <div style="margin-bottom:1rem">
+          <label style="font-weight:600;margin-bottom:.75rem;display:block">🏆 Insígnies (<span id="badges-count">0</span>/12)</label>
+          <div class="badges-container" id="badges-list"></div>
+        </div>
+        
+        <button class="btn btn-secondary btn-small" id="btn-back-volta">← Tornar</button>
+      </section>
+    </div>
+    
+    <!-- Tooltip comarca -->
+    <div class="comarca-tooltip" id="comarca-tooltip">
+      <div class="tooltip-header">
+        <span class="tooltip-emoji" id="tooltip-emoji">🏛️</span>
+        <div>
+          <div class="tooltip-name" id="tooltip-name">Comarca</div>
+          <div class="tooltip-capital" id="tooltip-capital">Capital</div>
+        </div>
+      </div>
+      <div class="tooltip-curiosity" id="tooltip-curiosity">Curiositat</div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="screen-config" class="screen">
+      <section class="card">
+        <div class="result-header"><div class="result-icon">⚙️</div><div><div class="result-title">Configuració</div><div class="result-subtitle">Modifica les teves dades</div></div></div>
+        
+        <div class="form-group">
+          <label style="text-align:center">🎨 Color de l'aplicació</label>
+          <div class="color-selector" id="color-selector">
+            <div class="color-option color-green" data-color="green" title="Verd"></div>
+            <div class="color-option color-blue" data-color="blue" title="Blau"></div>
+            <div class="color-option color-purple" data-color="purple" title="Lila"></div>
+            <div class="color-option color-coral" data-color="coral" title="Coral"></div>
+          </div>
+        </div>
+        
+        <div class="summary-box">
+          <div class="summary-row"><span>IMC</span><span id="cfg-imc">—</span></div>
+          <div class="summary-row"><span>Caminar (mant.)</span><span id="cfg-maintain-km">— km</span></div>
+          <div class="summary-row"><span>Caminar (opt.)</span><span id="cfg-optimize-km">— km</span></div>
+          <div class="summary-row"><span>Aigua</span><span id="cfg-water">— gots</span></div>
+        </div>
+        <form id="form-config">
+          <div class="form-group"><label>Sexe</label><div class="sex-selector"><div class="sex-option"><input type="radio" name="sex-config" id="sex-m-config" value="M" checked><label for="sex-m-config"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div><div class="sex-option"><input type="radio" name="sex-config" id="sex-f-config" value="F"><label for="sex-f-config"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div></div></div>
+          <div class="form-group"><label for="age-config">Edat</label><div class="input-wrapper"><input type="number" id="age-config" inputmode="numeric" min="5" max="120" required><span class="unit">anys</span></div></div>
+          <div class="form-group"><label for="height-config">Alçada</label><div class="input-wrapper"><input type="number" id="height-config" inputmode="numeric" min="100" max="250" required><span class="unit">cm</span></div></div>
+          <div class="form-group"><label for="weight-config">Pes</label><div class="input-wrapper"><input type="number" id="weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
+          <div class="form-group">
+            <label>Horari de son</label>
+            <div class="time-inputs">
+              <div><label for="wake-config" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-config" required></div>
+              <div><label for="sleep-config" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-config" required></div>
+            </div>
+          </div>
+          <button type="submit" class="btn">Recalcular objectius</button>
+        </form>
+        <div class="water-schedule" id="water-schedule-config"></div>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
+      </section>
+    </div>
+  </div>
+  
+  <!-- Celebration modal -->
+  <div class="celebration" id="celebration">
+    <div class="celebration-content">
+      <div class="celebration-emoji" id="celeb-emoji">🎉</div>
+      <div class="celebration-title" id="celeb-title">Felicitats!</div>
+      <div class="celebration-text" id="celeb-text">Has aconseguit una fita!</div>
+      <button class="btn btn-cat" onclick="closeCelebration()">Continuar</button>
+    </div>
+  </div>
+
+  <script>
+    // ============= COMARQUES DATA =============
+    const COMARQUES = [
+      {id:1,name:"Alt Camp",capital:"Valls",emoji:"🏰",lat:41.286,lng:1.249,curiosity:"Famosa pels Castells humans, Patrimoni de la Humanitat UNESCO.",plat:"Calçots amb salsa romesco",festa:"Festa de la Calçotada (gener)"},
+      {id:2,name:"Alt Empordà",capital:"Figueres",emoji:"🎨",lat:42.266,lng:2.961,curiosity:"Terra natal de Salvador Dalí. El Teatre-Museu Dalí és el més visitat de Catalunya.",plat:"Anxoves de l'Escala",festa:"Fires de Santa Creu (maig)"},
+      {id:3,name:"Alt Penedès",capital:"Vilafranca del Penedès",emoji:"🍾",lat:41.346,lng:1.697,curiosity:"Capital del cava! Produeix el 95% del cava espanyol.",plat:"Xató",festa:"Festa Major (30 agost)"},
+      {id:4,name:"Alt Urgell",capital:"La Seu d'Urgell",emoji:"⛷️",lat:42.357,lng:1.457,curiosity:"L'únic bisbat compartit entre Espanya i França (Andorra).",plat:"Formatge de l'Alt Urgell",festa:"Festa Major (darrer diumenge d'agost)"},
+      {id:5,name:"Alta Ribagorça",capital:"El Pont de Suert",emoji:"🏔️",lat:42.408,lng:0.745,curiosity:"Conté la Pica d'Estats (3.143m), el cim més alt de Catalunya.",plat:"Girella",festa:"Falles (juny, UNESCO)"},
+      {id:6,name:"Anoia",capital:"Igualada",emoji:"🎭",lat:41.579,lng:1.619,curiosity:"Capital europea de la pell i el cuir.",plat:"Espineta amb cargols",festa:"Festa Major (24 agost)"},
+      {id:7,name:"Bages",capital:"Manresa",emoji:"⛪",lat:41.725,lng:1.828,curiosity:"Sant Ignasi de Loiola va tenir la seva conversió a la Cova de Manresa.",plat:"Faves a la catalana",festa:"Festa de la Llum (febrer)"},
+      {id:8,name:"Baix Camp",capital:"Reus",emoji:"🎪",lat:41.155,lng:1.106,curiosity:"Reus és la ciutat natal d'Antoni Gaudí.",plat:"Romesco",festa:"Festa Major de Sant Pere (29 juny)"},
+      {id:9,name:"Baix Ebre",capital:"Tortosa",emoji:"🦅",lat:40.812,lng:0.521,curiosity:"Tortosa té una de les catedrals gòtiques més importants de Catalunya.",plat:"Arròs a banda",festa:"Festa del Renaixement (juliol)"},
+      {id:10,name:"Baix Empordà",capital:"La Bisbal d'Empordà",emoji:"🏺",lat:41.957,lng:3.040,curiosity:"Capital de la ceràmica catalana. Costa Brava espectacular.",plat:"Suquet de peix",festa:"Festa Major (15 agost)"},
+      {id:11,name:"Baix Llobregat",capital:"Sant Feliu de Llobregat",emoji:"🥬",lat:41.383,lng:2.044,curiosity:"L'horta del Baix Llobregat és una de les més productives d'Europa.",plat:"Carxofes del Prat",festa:"Festa Major (agost)"},
+      {id:12,name:"Baix Penedès",capital:"El Vendrell",emoji:"🎸",lat:41.218,lng:1.536,curiosity:"Terra natal de Pau Casals, el millor violoncel·lista de la història.",plat:"Xató",festa:"Festa Major de Santa Anna (juliol)"},
+      {id:13,name:"Barcelonès",capital:"Barcelona",emoji:"🏛️",lat:41.385,lng:2.173,curiosity:"La Sagrada Família rep més de 4 milions de visitants l'any.",plat:"Pa amb tomàquet",festa:"La Mercè (24 setembre)"},
+      {id:14,name:"Berguedà",capital:"Berga",emoji:"🔥",lat:42.101,lng:1.846,curiosity:"La Patum és Patrimoni de la Humanitat per la UNESCO.",plat:"Bolets de tardor",festa:"La Patum (Corpus)"},
+      {id:15,name:"Cerdanya",capital:"Puigcerdà",emoji:"🎿",lat:42.431,lng:1.928,curiosity:"La vall més àmplia dels Pirineus, compartida amb França.",plat:"Trinxat de la Cerdanya",festa:"Festa de l'Estany (agost)"},
+      {id:16,name:"Conca de Barberà",capital:"Montblanc",emoji:"🏰",lat:41.377,lng:1.163,curiosity:"Montblanc té les muralles medievals més ben conservades de Catalunya.",plat:"Caragols a la llauna",festa:"Setmana Medieval (abril)"},
+      {id:17,name:"Garraf",capital:"Vilanova i la Geltrú",emoji:"🏖️",lat:41.224,lng:1.725,curiosity:"Sitges és la capital del cinema fantàstic i LGTBI d'Espanya.",plat:"Xató",festa:"Carnaval de Sitges (febrer)"},
+      {id:18,name:"Garrigues",capital:"Les Borges Blanques",emoji:"🫒",lat:41.510,lng:0.860,curiosity:"Produeix l'oli d'oliva amb DOP Les Garrigues, dels millors del món.",plat:"Coc de recapte",festa:"Festa de l'Oli (gener)"},
+      {id:19,name:"Garrotxa",capital:"Olot",emoji:"🌋",lat:42.182,lng:2.489,curiosity:"Zona volcànica amb més de 40 volcans! L'últim va erupcionar fa 11.000 anys.",plat:"Fesols de Santa Pau",festa:"Festes del Tura (8 setembre)"},
+      {id:20,name:"Gironès",capital:"Girona",emoji:"🌈",lat:42.004,lng:2.754,curiosity:"El Call Jueu de Girona és un dels millors conservats d'Europa.",plat:"Xuixo",festa:"Fires de Sant Narcís (novembre)"},
+      {id:21,name:"Maresme",capital:"Mataró",emoji:"🍓",lat:41.540,lng:2.444,curiosity:"El primer ferrocarril de la península ibèrica va ser Barcelona-Mataró (1848).",plat:"Maduixes del Maresme",festa:"Les Santes (27 juliol)"},
+      {id:22,name:"Moianès",capital:"Moià",emoji:"🌲",lat:41.811,lng:2.096,curiosity:"La comarca més jove de Catalunya, creada el 2015.",plat:"Mongetes de Moià",festa:"Festa Major (setembre)"},
+      {id:23,name:"Montsià",capital:"Amposta",emoji:"🦩",lat:40.709,lng:0.580,curiosity:"El Delta de l'Ebre és el major aiguamoll de Catalunya i refugi d'aus.",plat:"Arròs del Delta",festa:"Festa de la Plantada (juny)"},
+      {id:24,name:"Noguera",capital:"Balaguer",emoji:"🏞️",lat:41.790,lng:0.805,curiosity:"El Montsec té un dels cels més foscos d'Europa per observar estels.",plat:"Cargols a la llauna",festa:"Festa del Sant Crist (novembre)"},
+      {id:25,name:"Osona",capital:"Vic",emoji:"🌭",lat:41.930,lng:2.254,curiosity:"Vic és la capital de l'embotit català. El fuet i la llonganissa són llegendaris.",plat:"Llonganissa de Vic",festa:"Mercat Medieval (desembre)"},
+      {id:26,name:"Pallars Jussà",capital:"Tremp",emoji:"🦕",lat:42.166,lng:0.895,curiosity:"S'hi han trobat fòssils de dinosaures! Parc Cretaci.",plat:"Girella",festa:"Festa Major (agost)"},
+      {id:27,name:"Pallars Sobirà",capital:"Sort",emoji:"🛶",lat:42.413,lng:1.130,curiosity:"Sort significa 'sort' en català. S'hi compren molts bitllets de loteria!",plat:"Civet de senglar",festa:"Festa de la Fusta (juliol)"},
+      {id:28,name:"Pla d'Urgell",capital:"Mollerussa",emoji:"🌾",lat:41.633,lng:0.896,curiosity:"Terra de recs i canals, el regadiu va transformar l'economia.",plat:"Caragols a la brutesca",festa:"Festa Major (setembre)"},
+      {id:29,name:"Pla de l'Estany",capital:"Banyoles",emoji:"🚣",lat:42.119,lng:2.764,curiosity:"L'estany de Banyoles va ser seu olímpica de rem el 1992.",plat:"Ratafia",festa:"Festa Major (agost)"},
+      {id:30,name:"Priorat",capital:"Falset",emoji:"🍷",lat:41.144,lng:0.818,curiosity:"Els vins del Priorat estan entre els millors del món (DOQ).",plat:"Coca de recapte",festa:"Festa del Vi (maig)"},
+      {id:31,name:"Ribera d'Ebre",capital:"Móra d'Ebre",emoji:"🌊",lat:41.092,lng:0.641,curiosity:"La Batalla de l'Ebre (1938) va ser la més sagnant de la Guerra Civil.",plat:"Clotxa",festa:"Festa Major (agost)"},
+      {id:32,name:"Ripollès",capital:"Ripoll",emoji:"⚔️",lat:42.201,lng:2.190,curiosity:"Ripoll és el bressol de Catalunya. Guifré el Pilós hi va fundar monestirs.",plat:"Trinxat",festa:"Festa del Comte Guifré (setembre)"},
+      {id:33,name:"Segarra",capital:"Cervera",emoji:"📚",lat:41.671,lng:1.270,curiosity:"Cervera va tenir l'única universitat de Catalunya durant el s. XVIII.",plat:"Mató",festa:"Aquelarre (agost)"},
+      {id:34,name:"Segrià",capital:"Lleida",emoji:"🏰",lat:41.617,lng:0.620,curiosity:"La Seu Vella de Lleida és un dels monuments romànics més impressionants.",plat:"Cargols a la llauna",festa:"Festa Major (11 maig)"},
+      {id:35,name:"Selva",capital:"Santa Coloma de Farners",emoji:"♨️",lat:41.866,lng:2.662,curiosity:"Capital termal de Catalunya. Aigües amb propietats curatives.",plat:"Botifarra dolça",festa:"Festa Major (agost)"},
+      {id:36,name:"Solsonès",capital:"Solsona",emoji:"🎭",lat:41.994,lng:1.518,curiosity:"Capital dels gegants de Catalunya. Festa del Corpus impressionant.",plat:"Trumfos del Solsonès",festa:"Corpus (Patrimoni UNESCO)"},
+      {id:37,name:"Tarragonès",capital:"Tarragona",emoji:"🏛️",lat:41.117,lng:1.254,curiosity:"Tàrraco va ser capital de la Hispània romana. Patrimoni UNESCO.",plat:"Romesco",festa:"Santa Tecla (setembre)"},
+      {id:38,name:"Terra Alta",capital:"Gandesa",emoji:"🏜️",lat:41.055,lng:0.438,curiosity:"Terra de vins i paisatges àrids. Centres d'interpretació de la Batalla de l'Ebre.",plat:"Pa de pessic",festa:"Festa Major (agost)"},
+      {id:39,name:"Urgell",capital:"Tàrrega",emoji:"🎪",lat:41.650,lng:1.140,curiosity:"Fira del Teatre al Carrer més important d'Espanya.",plat:"Coca de recapte",festa:"Fira del Teatre (setembre)"},
+      {id:40,name:"Val d'Aran",capital:"Vielha",emoji:"🏔️",lat:42.702,lng:0.797,curiosity:"L'única comarca de parla occitana (aranès). Paisatges alpins.",plat:"Òlha aranesa",festa:"Festa deÒrt (juny)"},
+      {id:41,name:"Vallès Occidental",capital:"Sabadell",emoji:"🏭",lat:41.543,lng:2.104,curiosity:"Motor industrial de Catalunya. Terrassa i Sabadell van liderar el tèxtil.",plat:"Botifarra amb mongetes",festa:"Festa Major (setembre)"},
+      {id:42,name:"Vallès Oriental",capital:"Granollers",emoji:"🏃",lat:41.608,lng:2.286,curiosity:"Circuit de Catalunya, seu del GP de F1 i MotoGP.",plat:"Mongeta del ganxet",festa:"Festa Major (agost)"}
+    ];
+
+    const BADGES = [
+      {id:"first_step",icon:"🚶",name:"Primer Pas",desc:"Comença la volta",condition:()=>getVoltaProgress().totalKm>=1},
+      {id:"week_streak",icon:"🌅",name:"Setmana Activa",desc:"7 dies seguits caminant",condition:()=>false}, // TODO
+      {id:"first_comarca",icon:"📍",name:"Primera Parada",desc:"Arriba a la primera comarca",condition:()=>getVoltaProgress().visitedCount>=1},
+      {id:"five_comarques",icon:"🗺️",name:"Explorador",desc:"Visita 5 comarques",condition:()=>getVoltaProgress().visitedCount>=5},
+      {id:"ten_comarques",icon:"🎒",name:"Viatger",desc:"Visita 10 comarques",condition:()=>getVoltaProgress().visitedCount>=10},
+      {id:"half_volta",icon:"🏅",name:"Mig Camí",desc:"Completa el 50% de la volta",condition:()=>getVoltaProgress().visitedCount>=21},
+      {id:"coast",icon:"🏖️",name:"Costa Brava",desc:"Visita Alt i Baix Empordà",condition:()=>{const v=getVoltaProgress().visited;return v.includes(2)&&v.includes(10)}},
+      {id:"pirineu",icon:"🏔️",name:"Pirenaica",desc:"Arriba a l'Alta Ribagorça",condition:()=>getVoltaProgress().visited.includes(5)},
+      {id:"volcanic",icon:"🌋",name:"Terra de Volcans",desc:"Arriba a la Garrotxa",condition:()=>getVoltaProgress().visited.includes(19)},
+      {id:"wine",icon:"🍷",name:"Enamorat del Vi",desc:"Visita Priorat i Alt Penedès",condition:()=>{const v=getVoltaProgress().visited;return v.includes(30)&&v.includes(3)}},
+      {id:"level10",icon:"⭐",name:"Expert",desc:"Arriba al nivell 10",condition:()=>getVoltaProgress().level>=10},
+      {id:"complete",icon:"🏆",name:"Volta Completa!",desc:"Visita les 42 comarques",condition:()=>getVoltaProgress().visitedCount>=42}
+    ];
+
+    const TOTAL_ROUTE_KM = 980; // km totals aproximats
+    const GLASS_ML = 300;
+    const WATER_REDUCTION = 0.75;
+
+    // ============= BIOMES I DECORACIONS =============
+    const BIOMES = {
+      metro: {ids:[13,21,41,42,11,17],class:'biome-metro',decos:['🏢','🏬','🚇','🏙️','🚌']},
+      camp: {ids:[25,22,7,6,36,33,39,28,18],class:'biome-camp',decos:['🌾','🌻','🏠','🐄','🌳']},
+      pirineu: {ids:[15,40,5,27,26,4,32,14],class:'biome-pirineu',decos:['🏔️','⛷️','🦌','🌲','❄️']},
+      costa: {ids:[2,10,20,35,29,19],class:'biome-costa',decos:['🏖️','⛵','🐚','🌊','🦀']},
+      interior: {ids:[30,38,31,9,23,8,37,1,16,3,12,24,34],class:'biome-interior',decos:['🍇','🫒','🏺','🌿','🦎']},
+      volca: {ids:[19],class:'biome-volca',decos:['🌋','🪨','🌲','🦎','🍄']}
+    };
+    
+    function getBiomeForComarca(comarcaId){
+      for(const[name,biome]of Object.entries(BIOMES)){
+        if(biome.ids.includes(comarcaId))return biome;
+      }
+      return BIOMES.camp;
+    }
+    
+    // Recompenses cada X km
+    const REWARD_INTERVAL_KM = 5;
+    function getRewardsCollected(){
+      try{return JSON.parse(localStorage.getItem('wisewalk-rewards'))||[]}catch(_){return[]}
+    }
+    function saveRewardsCollected(rewards){localStorage.setItem('wisewalk-rewards',JSON.stringify(rewards))}
+
+    // ============= UTILS =============
+    const formatNum=n=>n.toLocaleString('ca-ES'),formatDecimal=n=>n.toString().replace('.',',');
+    function getTodayKey(){return new Date().toISOString().split('T')[0]}
+    function haversineDistance(lat1,lon1,lat2,lon2){const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180,a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))}
+
+    // ============= DOM ELEMENTS =============
+    const screenSetup=document.getElementById('screen-setup'),screenMain=document.getElementById('screen-main'),screenConfig=document.getElementById('screen-config'),screenVolta=document.getElementById('screen-volta');
+    const formSetup=document.getElementById('form-setup'),formConfig=document.getElementById('form-config');
+    const btnConfig=document.getElementById('btnConfig'),btnBack=document.getElementById('btn-back'),themeToggle=document.getElementById('themeToggle');
+    const goalKmEl=document.getElementById('goal-km'),goalStepsEl=document.getElementById('goal-steps'),goalMinEl=document.getElementById('goal-min'),planLabelEl=document.getElementById('plan-label');
+    const trackStepsEl=document.getElementById('t-steps'),trackKmEl=document.getElementById('t-km'),trackMinEl=document.getElementById('t-min'),trackKcalEl=document.getElementById('t-kcal');
+    const progressFillEl=document.getElementById('progress-fill'),progressPctEl=document.getElementById('progress-pct'),trackingStatus=document.getElementById('tracking-status'),statusText=document.getElementById('status-text');
+    const planMaintain=document.getElementById('plan-maintain'),planOptimize=document.getElementById('plan-optimize');
+    const wGlassesEl=document.getElementById('w-glasses'),wLitersEl=document.getElementById('w-liters'),waterFillEl=document.getElementById('water-fill'),waterPctEl=document.getElementById('water-pct'),waterGoalLabel=document.getElementById('water-goal-label');
+
+    // ============= THEME =============
+    const html=document.documentElement,metaTheme=document.querySelector('meta[name="theme-color"]');
+    function setTheme(t){html.setAttribute('data-theme',t);localStorage.setItem('wisewalk-theme',t);metaTheme.setAttribute('content',t==='dark'?'#1a1d1d':'#f8f6f1')}
+    const savedTheme=localStorage.getItem('wisewalk-theme'),prefersDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
+    setTheme(savedTheme||(prefersDark?'dark':'light'));
+    themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
+
+    // ============= COLOR THEME =============
+    function setColorTheme(c){html.setAttribute('data-color',c);localStorage.setItem('wisewalk-color',c);updateColorSelector()}
+    function updateColorSelector(){const c=localStorage.getItem('wisewalk-color')||'green';document.querySelectorAll('.color-option').forEach(el=>{el.classList.toggle('active',el.dataset.color===c)})}
+    const savedColor=localStorage.getItem('wisewalk-color')||'green';
+    setColorTheme(savedColor);
+    document.getElementById('color-selector').addEventListener('click',e=>{const opt=e.target.closest('.color-option');if(opt)setColorTheme(opt.dataset.color)});
+
+    // ============= RANDOM ROUTE =============
+    let userLocation=null,currentRoute=null;
+    const routeInfo=document.getElementById('route-info'),routeDetails=document.getElementById('route-details'),btnGenerateRoute=document.getElementById('btn-generate-route'),btnOpenMaps=document.getElementById('btn-open-maps');
+    
+    function getLocation(){
+      routeInfo.textContent='Obtenint ubicació...';
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){WiseWalkAndroid.getLocation()}
+      else if('geolocation' in navigator){navigator.geolocation.getCurrentPosition(pos=>{setRouteUserLocation(pos.coords.latitude,pos.coords.longitude)},err=>{routeInfo.textContent='Error ubicació: '+err.message},{enableHighAccuracy:true,timeout:15000})}
+      else{routeInfo.textContent='Geolocalització no disponible'}
+    }
+    function setRouteUserLocation(lat,lng){userLocation={lat,lng};routeInfo.textContent='Ubicació obtinguda! Genera una ruta.'}
+    
+    function generateRandomRoute(){
+      if(!userLocation){getLocation();return}
+      const angle=Math.random()*2*Math.PI,d=0.0075,offset=(Math.random()-0.5)*0.002,perpAngle=angle+Math.PI/2;
+      const dest={lat:userLocation.lat+Math.cos(angle)*d+Math.cos(perpAngle)*offset,lng:userLocation.lng+Math.sin(angle)*d*1.4+Math.sin(perpAngle)*offset*1.4};
+      currentRoute={start:userLocation,end:dest};
+      const realDist=haversineDistance(userLocation.lat,userLocation.lng,dest.lat,dest.lng);
+      const totalDist=realDist*2,walkingTime=Math.round(totalDist/5*60);
+      document.getElementById('route-distance').textContent=formatDecimal(Math.round(totalDist*10)/10)+' km';
+      document.getElementById('route-time').textContent='~'+walkingTime+' min';
+      routeDetails.style.display='flex';btnOpenMaps.style.display='block';
+      routeInfo.textContent='Ruta generada! Distància d\'anada i tornada.';
+    }
+    
+    function openInGoogleMaps(){
+      if(!currentRoute)return;
+      const url='https://www.google.com/maps/dir/?api=1&origin='+currentRoute.start.lat+','+currentRoute.start.lng+'&destination='+currentRoute.end.lat+','+currentRoute.end.lng+'&travelmode=walking';
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.openUrl)WiseWalkAndroid.openUrl(url);else window.open(url,'_blank');
+    }
+    
+    btnGenerateRoute.addEventListener('click',generateRandomRoute);
+    btnOpenMaps.addEventListener('click',openInGoogleMaps);
+
+    // ============= NAVIGATION =============
+    function showScreen(n){[screenSetup,screenMain,screenConfig,screenVolta].forEach(s=>s.classList.remove('active'));
+      if(n==='setup')screenSetup.classList.add('active');
+      else if(n==='main'){screenMain.classList.add('active');updateWaterDisplay();updateVoltaDisplay()}
+      else if(n==='config'){screenConfig.classList.add('active');updateWaterScheduleConfig();updateColorSelector()}
+      else if(n==='volta'){screenVolta.classList.add('active');updateVoltaDetailScreen()}
+    }
+    btnConfig.addEventListener('click',()=>{loadConfigForm();showScreen('config')});
+    btnBack.addEventListener('click',()=>showScreen('main'));
+    document.getElementById('btn-volta-detail').addEventListener('click',()=>showScreen('volta'));
+    document.getElementById('btn-back-volta').addEventListener('click',()=>showScreen('main'));
+
+    // ============= WALKING CALCULATOR =============
+    function walkingTargetPersonalized({ageYears,sex,heightCm,weightKg,level="moderat"}){const clamp=(v,min,max)=>Math.min(Math.max(v,min),max),roundTo=(v,d)=>{const p=10**d;return Math.round(v*p)/p};const age=Number(ageYears),hCm=Number(heightCm),wKg=Number(weightKg),sexKey=String(sex||"M").toUpperCase()==="F"?"F":"M";const sexParams={M:{strideCoef:.415,baseSteps:8000,cadenceBase:115},F:{strideCoef:.413,baseSteps:7500,cadenceBase:110}};const{strideCoef,baseSteps,cadenceBase}=sexParams[sexKey];let ageFactor;if(age<18)ageFactor=1.25;else if(age<50)ageFactor=1;else if(age<65)ageFactor=1-((age-50)/15)*.15;else if(age<80)ageFactor=.85-((age-65)/15)*.15;else ageFactor=clamp(.7-((age-80)/20)*.1,.6,.7);const heightM=hCm/100,imc=wKg/(heightM*heightM),imcIdeal=sexKey==="M"?22:21;let imcFactor;if(imc<=imcIdeal+2)imcFactor=1;else if(imc<=30)imcFactor=1-((imc-imcIdeal-2)/6)*.1;else imcFactor=clamp(.9-((imc-30)/10)*.1,.8,.9);const levelMultipliers={bàsic:.65,moderat:1,actiu:1.3,òptim:1.6},levelFactor=levelMultipliers[level]||1;let baseCadence;if(age<40)baseCadence=cadenceBase;else if(age<65)baseCadence=cadenceBase-Math.floor((age-40)*.4);else baseCadence=clamp(cadenceBase-10-Math.floor((age-65)*.3),85,105);const cadenceBoost=level==="actiu"?1.08:level==="òptim"?1.12:1,effectiveCadence=Math.round(baseCadence*cadenceBoost),targetSteps=Math.round((baseSteps*ageFactor*levelFactor)/100)*100,dailyMin=targetSteps/effectiveCadence,stepLenM=heightM*strideCoef,speedKmh=(effectiveCadence*stepLenM*60)/1000,kmPerDayRaw=(dailyMin*speedKmh)/60,kmPerDay=kmPerDayRaw*imcFactor,adjustedDailyMin=dailyMin/imcFactor;return{imc:roundTo(imc,1),stepsPerDay:targetSteps,dailyMin:roundTo(adjustedDailyMin,0),kmPerDay:roundTo(kmPerDay,1)}}
+
+    // ============= WATER CALCULATOR =============
+    function calculateWater({sex,ageYears,weightKg,heightCm}){let mlPerKg=(sex==='M')?35:31;if(ageYears<18)mlPerKg=40;if(ageYears>60)mlPerKg*=0.9;let totalMl=weightKg*mlPerKg;totalMl*=(1+((heightCm-170)/10)*0.02);totalMl*=WATER_REDUCTION;return{glasses:Math.round(totalMl/GLASS_ML),totalMl:Math.round(totalMl)}}
+
+    function getWaterSchedule(totalGlasses,wakeTime,sleepTime){const wakeH=parseInt(wakeTime.split(':')[0])||7,sleepH=parseInt(sleepTime.split(':')[0])||23;let stopH=sleepH-3;if(stopH<0)stopH+=24;const hours=stopH>wakeH?stopH-wakeH:24-wakeH+stopH;const interval=hours/(totalGlasses-1||1);const schedule=[];for(let i=0;i<totalGlasses;i++){const h=(wakeH+Math.round(i*interval))%24;schedule.push({time:`${h.toString().padStart(2,'0')}:00`,glass:i+1})}return schedule}
+    
+    function updateWaterScheduleConfig(){const p=loadProfile(),g=loadGoals();if(!p||!g)return;const schedule=getWaterSchedule(g.waterGlasses,p.wakeTime,p.sleepTime);document.getElementById('water-schedule-config').innerHTML=`<div class="water-schedule-title">💧 Pauta (gots ${GLASS_ML}ml)</div>`+schedule.map(s=>`<div class="water-schedule-item"><span>${s.time}</span><span>${s.glass}/${g.waterGlasses}</span></div>`).join('')+`<div style="margin-top:.5rem;font-size:.75rem;color:var(--text-soft)">Fins 3h abans de dormir</div>`}
+
+    // ============= STORAGE =============
+    function saveProfile(p){localStorage.setItem('wisewalk-profile',JSON.stringify(p))}
+    function loadProfile(){try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}}
+    function saveGoals(g){localStorage.setItem('wisewalk-goals',JSON.stringify(g))}
+    function loadGoals(){try{return JSON.parse(localStorage.getItem('wisewalk-goals'))}catch(_){return null}}
+    function getActivePlan(){return localStorage.getItem('wisewalk-active-plan')||'maintain'}
+    function setActivePlan(p){localStorage.setItem('wisewalk-active-plan',p)}
+    function isConfigured(){const p=loadProfile(),g=loadGoals();return p&&g&&g.maintainKm>0}
+    
+    function getTodayWater(){try{return parseInt(localStorage.getItem('wisewalk-water-'+getTodayKey()))||0}catch(_){return 0}}
+    function setTodayWater(g){localStorage.setItem('wisewalk-water-'+getTodayKey(),g.toString())}
+    function addWater(n){setTodayWater(Math.max(0,getTodayWater()+n));updateWaterDisplay()}
+    
+    function updateWaterDisplay(){const g=getTodayWater(),goals=loadGoals(),goal=goals?goals.waterGlasses:8;wGlassesEl.textContent=g;wLitersEl.textContent=formatDecimal((g*GLASS_ML/1000).toFixed(1));const pct=Math.min(100,Math.round(g/goal*100));waterFillEl.style.width=pct+'%';waterPctEl.textContent=pct+'%';waterGoalLabel.textContent=goal+' gots de '+GLASS_ML+'ml'}
+
+    // ============= VOLTA A CATALUNYA =============
+    function getVoltaProgress(){
+      try{
+        const data=JSON.parse(localStorage.getItem('wisewalk-volta'))||{};
+        return{
+          totalKm:data.totalKm||0,
+          currentComarca:data.currentComarca||0,
+          kmInCurrentLeg:data.kmInCurrentLeg||0,
+          visited:data.visited||[],
+          visitedCount:(data.visited||[]).length,
+          xp:data.xp||0,
+          level:Math.floor((data.xp||0)/500)+1,
+          earnedBadges:data.earnedBadges||[],
+          route:data.route||[],
+          startComarcaId:data.startComarcaId||null
+        };
+      }catch(_){return{totalKm:0,currentComarca:0,kmInCurrentLeg:0,visited:[],visitedCount:0,xp:0,level:1,earnedBadges:[],route:[],startComarcaId:null}}
+    }
+    
+    function saveVoltaProgress(data){localStorage.setItem('wisewalk-volta',JSON.stringify(data))}
+    
+    function initVoltaRoute(startLat,startLng){
+      // Find nearest comarca
+      let nearest=COMARQUES[0],minDist=Infinity;
+      COMARQUES.forEach(c=>{const d=haversineDistance(startLat,startLng,c.lat,c.lng);if(d<minDist){minDist=d;nearest=c}});
+      
+      // Create route starting from nearest
+      const startIdx=COMARQUES.findIndex(c=>c.id===nearest.id);
+      const route=[];
+      for(let i=0;i<COMARQUES.length;i++){route.push(COMARQUES[(startIdx+i)%COMARQUES.length].id)}
+      
+      // Calculate distances between consecutive comarques
+      const distances=[];
+      for(let i=0;i<route.length;i++){
+        const curr=COMARQUES.find(c=>c.id===route[i]);
+        const next=COMARQUES.find(c=>c.id===route[(i+1)%route.length]);
+        distances.push(Math.round(haversineDistance(curr.lat,curr.lng,next.lat,next.lng)));
+      }
+      
+      const progress={totalKm:0,currentComarca:0,kmInCurrentLeg:0,visited:[],xp:0,earnedBadges:[],route,distances,startComarcaId:nearest.id};
+      saveVoltaProgress(progress);
+      return progress;
+    }
+    
+    function addKmToVolta(km){
+      let p=getVoltaProgress();
+      if(!p.route||p.route.length===0){
+        // Init with default location (Barcelona area)
+        p=initVoltaRoute(41.385,2.173);
+      }
+      
+      p.totalKm+=km;
+      p.kmInCurrentLeg+=km;
+      p.xp+=Math.round(km*10); // 10 XP per km
+      
+      // Check if arrived at next comarca
+      const distToNext=p.distances?p.distances[p.currentComarca]:25;
+      while(p.kmInCurrentLeg>=distToNext && p.currentComarca<p.route.length-1){
+        p.kmInCurrentLeg-=distToNext;
+        p.currentComarca++;
+        const arrivedId=p.route[p.currentComarca];
+        if(!p.visited.includes(arrivedId)){
+          p.visited.push(arrivedId);
+          p.xp+=100; // Bonus XP for new comarca
+          const comarca=COMARQUES.find(c=>c.id===arrivedId);
+          showCelebration(comarca.emoji,`Has arribat a ${comarca.name}!`,comarca.curiosity);
+        }
+      }
+      
+      // Check badges
+      BADGES.forEach(b=>{
+        if(!p.earnedBadges.includes(b.id)&&b.condition()){
+          p.earnedBadges.push(b.id);
+          setTimeout(()=>showCelebration(b.icon,b.name,b.desc),1500);
+        }
+      });
+      
+      p.level=Math.floor(p.xp/500)+1;
+      saveVoltaProgress(p);
+      updateVoltaDisplay();
+    }
+    
+    function updateVoltaDisplay(){
+      const p=getVoltaProgress();
+      if(!p.route||p.route.length===0)return;
+      
+      const currentId=p.route[p.currentComarca];
+      const current=COMARQUES.find(c=>c.id===currentId);
+      const nextIdx=(p.currentComarca+1)%p.route.length;
+      const nextId=p.route[nextIdx];
+      const next=COMARQUES.find(c=>c.id===nextId);
+      const distToNext=p.distances?p.distances[p.currentComarca]:25;
+      
+      // Info comarca actual
+      document.getElementById('comarca-emoji').textContent=current.emoji;
+      document.getElementById('comarca-name').textContent=current.name;
+      document.getElementById('comarca-capital').textContent=`Capital: ${current.capital}`;
+      document.getElementById('comarca-curiosity').textContent=current.curiosity;
+      
+      document.getElementById('comarca-next').innerHTML=`${next.emoji} ${next.name} (${distToNext} km)`;
+      document.getElementById('km-progress-label').textContent=`${formatDecimal(p.kmInCurrentLeg.toFixed(1))} / ${distToNext} km`;
+      const legPct=Math.min(100,Math.round(p.kmInCurrentLeg/distToNext*100));
+      document.getElementById('km-progress-pct').textContent=legPct+'%';
+      document.getElementById('km-progress-fill').style.width=legPct+'%';
+      
+      // Stats
+      document.getElementById('volta-km').textContent=formatDecimal(p.totalKm.toFixed(1));
+      document.getElementById('volta-comarques').textContent=`${p.visitedCount}/42`;
+      document.getElementById('volta-xp').textContent=formatNum(p.xp);
+      document.getElementById('volta-level').textContent=p.level;
+      document.getElementById('volta-subtitle').textContent=`${42-p.visitedCount} comarques per descobrir`;
+      
+      // Genera el camí visual
+      renderPathPreview(p);
+    }
+    
+    function renderPathPreview(p){
+      const container=document.getElementById('path-scroll');
+      const numToShow=7; // Comarques a mostrar al preview
+      const startIdx=Math.max(0,p.currentComarca-2);
+      const endIdx=Math.min(p.route.length,startIdx+numToShow);
+      
+      let html='';
+      let cumulativeKm=0;
+      for(let i=0;i<p.currentComarca;i++){cumulativeKm+=(p.distances?p.distances[i]:25)}
+      cumulativeKm+=p.kmInCurrentLeg;
+      
+      for(let i=startIdx;i<endIdx;i++){
+        const comarcaId=p.route[i];
+        const comarca=COMARQUES.find(c=>c.id===comarcaId);
+        const biome=getBiomeForComarca(comarcaId);
+        const isVisited=p.visited.includes(comarcaId);
+        const isCurrent=i===p.currentComarca;
+        const isLeft=i%2===0;
+        
+        // Decoracions
+        const deco=biome.decos[Math.floor(Math.random()*biome.decos.length)];
+        const decoPos=isLeft?'right:15px':'left:15px';
+        
+        html+=`<div class="path-biome ${biome.class}">
+          <div class="path-row" style="justify-content:${isLeft?'flex-start':'flex-end'};padding:0 40px">
+            <div class="path-node ${isVisited?'visited':''} ${isCurrent?'current':''} ${!isVisited&&!isCurrent?'locked':''}" 
+                 data-comarca="${comarcaId}" title="${comarca.name}">
+              ${comarca.emoji}
+            </div>
+            <span class="path-label" style="${isLeft?'left:95px':'right:95px'}">${comarca.name}</span>
+            <span class="path-deco" style="${decoPos};top:50%;transform:translateY(-50%)">${deco}</span>
+          </div>
+        </div>`;
+      }
+      
+      container.innerHTML=html;
+      
+      // Posició del walker
+      const walker=document.getElementById('pixel-walker');
+      const nodeIdx=p.currentComarca-startIdx;
+      if(nodeIdx>=0&&nodeIdx<numToShow){
+        const isLeft=p.currentComarca%2===0;
+        walker.style.display='block';
+        walker.style.bottom=(nodeIdx*90+30)+'px';
+        walker.style.left=isLeft?'60px':'calc(100% - 92px)';
+      }
+    }
+    
+    function renderFullPath(p){
+      const container=document.getElementById('path-full-scroll');
+      let html='';
+      let cumulativeKm=0;
+      const rewards=getRewardsCollected();
+      
+      for(let i=0;i<p.route.length;i++){
+        const comarcaId=p.route[i];
+        const comarca=COMARQUES.find(c=>c.id===comarcaId);
+        const biome=getBiomeForComarca(comarcaId);
+        const isVisited=p.visited.includes(comarcaId);
+        const isCurrent=i===p.currentComarca;
+        const isLeft=i%2===0;
+        const distToHere=i>0?(p.distances?p.distances[i-1]:25):0;
+        cumulativeKm+=distToHere;
+        
+        // Decoracions
+        const deco1=biome.decos[i%biome.decos.length];
+        const deco2=biome.decos[(i+2)%biome.decos.length];
+        
+        // Recompenses cada REWARD_INTERVAL_KM
+        const rewardKm=Math.floor(cumulativeKm/REWARD_INTERVAL_KM)*REWARD_INTERVAL_KM;
+        const showReward=rewardKm>0&&rewardKm%REWARD_INTERVAL_KM===0&&i>0&&((cumulativeKm-distToHere)<rewardKm);
+        const rewardCollected=rewards.includes(rewardKm);
+        
+        html+=`<div class="path-biome ${biome.class}" style="position:relative">
+          ${i>0?`<span class="path-km-marker">${Math.round(cumulativeKm)} km</span>`:''}
+          <span class="path-deco" style="left:10px;top:10px">${deco1}</span>
+          <span class="path-deco" style="right:10px;bottom:10px">${deco2}</span>
+          <div class="path-row" style="justify-content:${isLeft?'flex-start':'flex-end'};padding:0 50px">
+            <div class="path-node ${isVisited?'visited':''} ${isCurrent?'current':''} ${!isVisited&&!isCurrent?'locked':''}" 
+                 onclick="showComarcaTooltip(event,${comarcaId})" data-comarca="${comarcaId}">
+              ${comarca.emoji}
+            </div>
+            <span class="path-label" style="${isLeft?'left:105px':'right:105px'}">${comarca.name}</span>
+          </div>
+        </div>`;
+      }
+      
+      container.innerHTML=html;
+    }
+    
+    function showComarcaTooltip(e,comarcaId){
+      const comarca=COMARQUES.find(c=>c.id===comarcaId);
+      const tooltip=document.getElementById('comarca-tooltip');
+      document.getElementById('tooltip-emoji').textContent=comarca.emoji;
+      document.getElementById('tooltip-name').textContent=comarca.name;
+      document.getElementById('tooltip-capital').textContent=`Capital: ${comarca.capital}`;
+      document.getElementById('tooltip-curiosity').textContent=comarca.curiosity;
+      
+      const rect=e.target.getBoundingClientRect();
+      tooltip.style.top=(rect.bottom+10)+'px';
+      tooltip.style.left=Math.min(rect.left,window.innerWidth-300)+'px';
+      tooltip.classList.add('active');
+      
+      setTimeout(()=>tooltip.classList.remove('active'),3000);
+    }
+    
+    function updateVoltaDetailScreen(){
+      const p=getVoltaProgress();
+      document.getElementById('detail-km').textContent=formatDecimal(p.totalKm.toFixed(1))+' km';
+      document.getElementById('detail-comarques').textContent=`${p.visitedCount} / 42`;
+      const rewardsCount=Math.floor(p.totalKm/REWARD_INTERVAL_KM);
+      document.getElementById('detail-rewards').textContent=rewardsCount+' ⭐';
+      document.getElementById('detail-xp').textContent=formatNum(p.xp)+' XP';
+      document.getElementById('detail-level').textContent=p.level;
+      
+      // Badges
+      document.getElementById('badges-count').textContent=p.earnedBadges.length;
+      document.getElementById('badges-list').innerHTML=BADGES.map(b=>`<div class="badge ${p.earnedBadges.includes(b.id)?'earned':'locked'}"><span class="badge-icon">${b.icon}</span><span>${b.name}</span></div>`).join('');
+      
+      // Render full path
+      renderFullPath(p);
+    }
+
+    // ============= CELEBRATION =============
+    function showCelebration(emoji,title,text){
+      document.getElementById('celeb-emoji').textContent=emoji;
+      document.getElementById('celeb-title').textContent=title;
+      document.getElementById('celeb-text').textContent=text;
+      document.getElementById('celebration').classList.add('active');
+    }
+    function closeCelebration(){document.getElementById('celebration').classList.remove('active')}
+
+    // ============= PROFILE & GOALS =============
+    function calculateAndSave(sex,age,height,weight,wakeTime,sleepTime){
+      const maintain=walkingTargetPersonalized({ageYears:age,sex,heightCm:height,weightKg:weight,level:"moderat"});
+      const optimize=walkingTargetPersonalized({ageYears:age,sex,heightCm:height,weightKg:weight,level:"actiu"});
+      const water=calculateWater({sex,ageYears:age,weightKg:weight,heightCm:height});
+      saveProfile({sex,ageYears:age,heightCm:height,weightKg:weight,wakeTime,sleepTime});
+      saveGoals({imc:maintain.imc,maintainKm:maintain.kmPerDay,maintainSteps:maintain.stepsPerDay,maintainMin:maintain.dailyMin,optimizeKm:optimize.kmPerDay,optimizeSteps:optimize.stepsPerDay,optimizeMin:optimize.dailyMin,waterGlasses:water.glasses});
+      pushProfileToAndroid();
+    }
+    
+    function pushProfileToAndroid(){
+      const p=loadProfile(),g=loadGoals();
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.setProfile){
+        try{WiseWalkAndroid.setProfile(JSON.stringify({...p,goals:g,activePlan:getActivePlan(),glassMl:GLASS_ML}))}catch(_){}
+      }
+    }
+    
+    function updateGoalDisplay(){
+      const g=loadGoals(),plan=getActivePlan();if(!g)return;
+      const km=plan==='optimize'?g.optimizeKm:g.maintainKm;
+      const steps=plan==='optimize'?g.optimizeSteps:g.maintainSteps;
+      const min=plan==='optimize'?g.optimizeMin:g.maintainMin;
+      goalKmEl.textContent=formatDecimal(km);goalStepsEl.textContent=formatNum(steps);goalMinEl.textContent=min;
+      planLabelEl.textContent=plan==='optimize'?"Pla d'optimització":"Pla de manteniment";
+      planMaintain.checked=plan==='maintain';planOptimize.checked=plan==='optimize';
+    }
+    
+    function updateConfigSummary(){
+      const g=loadGoals();if(!g)return;
+      document.getElementById('cfg-imc').textContent=formatDecimal(g.imc);
+      document.getElementById('cfg-maintain-km').textContent=formatDecimal(g.maintainKm)+' km';
+      document.getElementById('cfg-optimize-km').textContent=formatDecimal(g.optimizeKm)+' km';
+      document.getElementById('cfg-water').textContent=g.waterGlasses+' gots';
+    }
+    
+    function loadConfigForm(){
+      const p=loadProfile();if(!p)return;
+      document.getElementById('age-config').value=p.ageYears;
+      document.getElementById('height-config').value=p.heightCm;
+      document.getElementById('weight-config').value=p.weightKg;
+      document.getElementById('wake-config').value=p.wakeTime;
+      document.getElementById('sleep-config').value=p.sleepTime;
+      document.getElementById(p.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
+      updateConfigSummary();
+    }
+
+    // ============= TRACKING UPDATES =============
+    let lastKmForVolta=0;
+    
+    function saveTodayTracking(stats){localStorage.setItem('wisewalk-tracking-'+getTodayKey(),JSON.stringify(stats))}
+    function loadTodayTracking(){try{return JSON.parse(localStorage.getItem('wisewalk-tracking-'+getTodayKey()))}catch(_){return null}}
+    
+    function restoreTodayTracking(){
+      const s=loadTodayTracking();if(!s)return;
+      trackStepsEl.textContent=formatNum(s.steps||0);
+      trackKmEl.textContent=formatDecimal((s.distanceKm||0).toFixed(1));
+      trackMinEl.textContent=s.walkingMin||0;
+      trackKcalEl.textContent=formatNum(s.kcal||0);
+      const g=loadGoals(),plan=getActivePlan(),goalKm=g?(plan==='optimize'?g.optimizeKm:g.maintainKm):0;
+      const pct=goalKm>0?Math.min(100,Math.round(s.distanceKm/goalKm*100)):0;
+      progressFillEl.style.width=pct+'%';progressPctEl.textContent=pct+'%';
+      lastKmForVolta=s.distanceKm||0;
+    }
+    
+    window.wiseWalkOnStatsUpdate=function(stats){
+      if(!stats)return;
+      trackStepsEl.textContent=formatNum(stats.steps||0);
+      trackKmEl.textContent=formatDecimal((stats.distanceKm||0).toFixed(1));
+      trackMinEl.textContent=stats.walkingMin||0;
+      trackKcalEl.textContent=formatNum(stats.kcal||0);
+      const g=loadGoals(),plan=getActivePlan(),goalKm=g?(plan==='optimize'?g.optimizeKm:g.maintainKm):0;
+      const pct=goalKm>0?Math.min(100,Math.round(stats.distanceKm/goalKm*100)):0;
+      progressFillEl.style.width=pct+'%';progressPctEl.textContent=pct+'%';
+      statusText.textContent=stats.goalReached?'🎉 Objectiu assolit!':'Comptant passos';
+      saveTodayTracking(stats);
+      
+      // Add km to volta
+      const newKm=stats.distanceKm||0;
+      if(newKm>lastKmForVolta){
+        addKmToVolta(newKm-lastKmForVolta);
+        lastKmForVolta=newKm;
+      }
+      
+      if(stats.waterGlasses!==undefined){setTodayWater(stats.waterGlasses);updateWaterDisplay()}
+    };
+    
+    window.wiseWalkOnTrackingStatus=function(s){
+      if(s&&s.running){trackingStatus.classList.remove('inactive');statusText.textContent='Comptant passos'}
+      else{trackingStatus.classList.add('inactive');statusText.textContent='Tracking inactiu'}
+    };
+    
+    window.wiseWalkSetLocation=function(lat,lng){
+      // Per la volta a Catalunya
+      const p=getVoltaProgress();
+      if(!p.route||p.route.length===0){initVoltaRoute(lat,lng);updateVoltaDisplay()}
+      // Per la ruta aleatòria
+      setRouteUserLocation(lat,lng);
+    };
+    window.wiseWalkAddWater=function(n){addWater(n||1)};
+
+    function requestAndroidTracking(){
+      if(window.WiseWalkAndroid){
+        if(WiseWalkAndroid.requestPermissions)WiseWalkAndroid.requestPermissions();
+        if(WiseWalkAndroid.startBackgroundTracking)WiseWalkAndroid.startBackgroundTracking();
+        if(WiseWalkAndroid.getLocation)WiseWalkAndroid.getLocation();
+      }
+    }
+
+    // ============= FORMS =============
+    formSetup.addEventListener('submit',e=>{
+      e.preventDefault();
+      const sex=document.querySelector('input[name="sex-setup"]:checked').value;
+      calculateAndSave(sex,document.getElementById('age-setup').value,document.getElementById('height-setup').value,document.getElementById('weight-setup').value,document.getElementById('wake-setup').value,document.getElementById('sleep-setup').value);
+      updateGoalDisplay();updateWaterDisplay();requestAndroidTracking();showScreen('main');
+    });
+    
+    formConfig.addEventListener('submit',e=>{
+      e.preventDefault();
+      const sex=document.querySelector('input[name="sex-config"]:checked').value;
+      calculateAndSave(sex,document.getElementById('age-config').value,document.getElementById('height-config').value,document.getElementById('weight-config').value,document.getElementById('wake-config').value,document.getElementById('sleep-config').value);
+      updateGoalDisplay();updateConfigSummary();updateWaterDisplay();showScreen('main');
+    });
+    
+    planMaintain.addEventListener('change',()=>{setActivePlan('maintain');updateGoalDisplay();pushProfileToAndroid()});
+    planOptimize.addEventListener('change',()=>{setActivePlan('optimize');updateGoalDisplay();pushProfileToAndroid()});
+
+    // ============= INIT =============
+    function init(){
+      if(isConfigured()){
+        updateGoalDisplay();updateWaterDisplay();restoreTodayTracking();
+        const p=getVoltaProgress();
+        if(!p.route||p.route.length===0)initVoltaRoute(41.385,2.173); // Default BCN
+        updateVoltaDisplay();
+        showScreen('main');
+        pushProfileToAndroid();requestAndroidTracking();
+      }else{showScreen('setup')}
+    }
+    
+    window.addWater=addWater;
+    init();
+  </script>
+</body>
+</html>
