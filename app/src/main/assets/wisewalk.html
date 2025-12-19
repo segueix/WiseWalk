@@ -264,12 +264,6 @@
           <div class="metric"><div class="metric-value" id="goal-steps">—</div><div class="metric-label">passos/dia</div></div>
           <div class="metric"><div class="metric-value" id="goal-min">—</div><div class="metric-label">minuts/dia</div></div>
         </div>
-        <div class="form-group" style="margin-top:1rem;margin-bottom:0">
-          <div class="sex-selector">
-            <div class="sex-option"><input type="radio" name="activePlan" id="plan-maintain" value="maintain" checked><label for="plan-maintain"><span class="sex-icon">⚖️</span><span class="sex-label">Manteniment</span></label></div>
-            <div class="sex-option"><input type="radio" name="activePlan" id="plan-optimize" value="optimize"><label for="plan-optimize"><span class="sex-icon">🔥</span><span class="sex-label">Optimització</span></label></div>
-          </div>
-        </div>
       </section>
 
       <!-- Seguiment caminar -->
@@ -450,6 +444,16 @@
           </div>
           <button type="submit" class="btn">Recalcular objectius</button>
         </form>
+        
+        <!-- SELECCIÓ DE PLA - Mogut aquí després del formulari -->
+        <div class="form-group" style="margin-top:1.5rem">
+          <label>📊 Pla d'objectius</label>
+          <div class="sex-selector">
+            <div class="sex-option"><input type="radio" name="activePlan" id="plan-maintain" value="maintain" checked><label for="plan-maintain"><span class="sex-icon">⚖️</span><span class="sex-label">Manteniment</span></label></div>
+            <div class="sex-option"><input type="radio" name="activePlan" id="plan-optimize" value="optimize"><label for="plan-optimize"><span class="sex-icon">🔥</span><span class="sex-label">Optimització</span></label></div>
+          </div>
+        </div>
+        
         <div class="water-schedule" id="water-schedule-config"></div>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
       </section>
@@ -623,7 +627,7 @@
     function showScreen(n){[screenSetup,screenMain,screenConfig,screenVolta].forEach(s=>s.classList.remove('active'));
       if(n==='setup')screenSetup.classList.add('active');
       else if(n==='main'){screenMain.classList.add('active');updateWaterDisplay();updateVoltaDisplay()}
-      else if(n==='config'){screenConfig.classList.add('active');updateWaterScheduleConfig();updateColorSelector()}
+      else if(n==='config'){screenConfig.classList.add('active');updateWaterScheduleConfig();updateColorSelector();loadPlanSelector()}
       else if(n==='volta'){screenVolta.classList.add('active');updateVoltaDetailScreen()}
     }
     btnConfig.addEventListener('click',()=>{loadConfigForm();showScreen('config')});
@@ -928,7 +932,6 @@
       const min=plan==='optimize'?g.optimizeMin:g.maintainMin;
       goalKmEl.textContent=formatDecimal(km);goalStepsEl.textContent=formatNum(steps);goalMinEl.textContent=min;
       planLabelEl.textContent=plan==='optimize'?"Pla d'optimització":"Pla de manteniment";
-      planMaintain.checked=plan==='maintain';planOptimize.checked=plan==='optimize';
     }
     
     function updateConfigSummary(){
@@ -948,6 +951,12 @@
       document.getElementById('sleep-config').value=p.sleepTime;
       document.getElementById(p.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
       updateConfigSummary();
+    }
+    
+    function loadPlanSelector(){
+      const plan=getActivePlan();
+      planMaintain.checked=plan==='maintain';
+      planOptimize.checked=plan==='optimize';
     }
 
     // ============= TRACKING UPDATES =============
@@ -1024,7 +1033,8 @@
       e.preventDefault();
       const sex=document.querySelector('input[name="sex-config"]:checked').value;
       calculateAndSave(sex,document.getElementById('age-config').value,document.getElementById('height-config').value,document.getElementById('weight-config').value,document.getElementById('wake-config').value,document.getElementById('sleep-config').value);
-      updateGoalDisplay();updateConfigSummary();updateWaterDisplay();showScreen('main');
+      updateGoalDisplay();updateConfigSummary();updateWaterDisplay();
+      loadPlanSelector(); // Actualitza el selector després de recalcular
     });
     
     planMaintain.addEventListener('change',()=>{setActivePlan('maintain');updateGoalDisplay();pushProfileToAndroid()});
