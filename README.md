@@ -11,6 +11,12 @@ Run
 - Let Gradle sync
 - Run on a device/emulator
 
+GitHub Actions
+- The repository includes `.github/workflows/android-apk.yml` to build a debug APK in GitHub Actions.
+- The workflow runs on pull requests, on pushes to `main`/`master`, and can also be launched manually with `workflow_dispatch`.
+- Each run uploads `app/build/outputs/apk/debug/app-debug.apk` as the `app-debug-apk` artifact.
+- More setup details are documented in `docs/github-actions-apk.md`.
+
 APK generation and change monitoring
 - `./gradlew assembleDebug` builds a debug APK at `app/build/outputs/apk/debug/app-debug.apk`
 - The repo does not commit `gradle-wrapper.jar`; if it is missing, `./gradlew` falls back to a local `gradle` installed in your PATH
