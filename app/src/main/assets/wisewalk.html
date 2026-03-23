@@ -109,6 +109,10 @@
       <section class="card" id="card-route">
         <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km</div></div></div>
         <div class="route-container">
+          <div id="calorie-goal-container" style="display:none; background:var(--accent-warm); color:#fff; padding:0.85rem; border-radius:10px; text-align:center; margin-bottom:1rem; font-size:0.95rem; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+            <div style="font-weight:700; margin-bottom:0.25rem;">🔥 Objectiu a llarg termini</div>
+            <div id="calorie-goal-text">Per arribar al teu pes ideal, necessites cremar X kcal.</div>
+          </div>
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
@@ -198,7 +202,10 @@
     function showScreen(name){
       [screenSetup,screenMain,screenConfig].forEach(screen=>screen.classList.remove('active'));
       if(name==='setup')screenSetup.classList.add('active');
-      if(name==='main')screenMain.classList.add('active');
+      if(name==='main') {
+        screenMain.classList.add('active');
+        updateCalorieGoal();
+      }
       if(name==='config')screenConfig.classList.add('active');
     }
 
@@ -206,6 +213,38 @@
       const profile=loadProfile();
       document.getElementById('cfg-profile-status').textContent=profile?'Desat':'Pendent';
       document.getElementById('cfg-schedule').textContent=profile?`${profile.wakeTime} - ${profile.sleepTime}`:'—';
+    }
+
+    function updateCalorieGoal(){
+      const profile=loadProfile();
+      const goalContainer=document.getElementById('calorie-goal-container');
+      const goalText=document.getElementById('calorie-goal-text');
+
+      if(!profile||!goalContainer||!goalText)return;
+
+      const height=parseFloat(profile.heightCm);
+      const weight=parseFloat(profile.weightKg);
+      let idealWeight=0;
+
+      if(profile.sex==='M'){
+        idealWeight=50+0.9*(height-152);
+      }else{
+        idealWeight=45.5+0.9*(height-152);
+      }
+
+      if(height<=152){
+        idealWeight=profile.sex==='M'?50:45.5;
+      }
+
+      const weightDiff=weight-idealWeight;
+
+      if(weightDiff<=0){
+        goalContainer.style.display='none';
+      }else{
+        const kcalToBurn=Math.round(weightDiff*7700);
+        goalContainer.style.display='block';
+        goalText.innerHTML=`Tens un excedent de <strong>${weightDiff.toFixed(1)} kg</strong>. Necessites cremar <strong>${kcalToBurn.toLocaleString('ca-ES')} kcal</strong> per arribar al teu pes ideal de ${idealWeight.toFixed(1)} kg.`;
+      }
     }
 
     function loadConfigForm(){
@@ -329,6 +368,7 @@
     setColorTheme(localStorage.getItem('wisewalk-color')||'green');
     updateConfigSummary();
     showScreen(loadProfile()?'main':'setup');
+    updateCalorieGoal();
   </script>
 </body>
 </html>
