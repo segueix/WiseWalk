@@ -2,10 +2,8 @@ package com.wisewalk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -34,25 +32,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
-
-    private val statsReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == StepTrackingService.ACTION_STATS_UPDATE) {
-                // Check if it's a water update
-                if (intent.hasExtra("water_update") && intent.getBooleanExtra("water_update", false)) {
-                    val glasses = intent.getIntExtra("water_glasses", 0)
-                    pushWaterToWeb(glasses)
-                    return
-                }
-                
-                // Otherwise it's a stats update
-                val json = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON)
-                if (json != null) {
-                    pushStatsToWeb(json)
-                }
-            }
-        }
-    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -105,56 +84,14 @@ class MainActivity : AppCompatActivity() {
             }
         })
         
-        // Handle intent extras (from notification)
-        handleIntentExtras(intent)
     }
     
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleIntentExtras(intent)
-    }
-    
-    private fun handleIntentExtras(intent: Intent?) {
-        if (intent?.getBooleanExtra("add_water", false) == true) {
-            // Add water glass from notification click
-            binding.webView.postDelayed({
-                val js = "window.wiseWalkAddWater && window.wiseWalkAddWater(1);"
-                binding.webView.evaluateJavascript(js, null)
-            }, 500)
-        }
-    }
-
     override fun onResume() {
         super.onResume()
-        
-        val filter = IntentFilter(StepTrackingService.ACTION_STATS_UPDATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(statsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(statsReceiver, filter)
-        }
-        
-        updateTrackingStatusToWeb()
-        
-        // Sync water glasses on resume
-        syncWaterGlassesFromPrefs()
     }
 
     override fun onPause() {
         super.onPause()
-        try {
-            unregisterReceiver(statsReceiver)
-        } catch (_: Exception) {}
-    }
-    
-    private fun syncWaterGlassesFromPrefs() {
-        val today = java.time.LocalDate.now().toString()
-        val glasses = prefs.getInt("water_glasses_$today", 0)
-        if (glasses > 0) {
-            binding.webView.postDelayed({
-                pushWaterToWeb(glasses)
-            }, 300)
-        }
     }
     
     private fun hasLocationPermission(): Boolean {
@@ -209,81 +146,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateTrackingStatusToWeb() {
-        val status = JSONObject().apply {
-            put("running", StepTrackingService.isRunning)
-        }
-        val js = "window.wiseWalkOnTrackingStatus && window.wiseWalkOnTrackingStatus($status);"
-        binding.webView.post {
-            binding.webView.evaluateJavascript(js, null)
-        }
-    }
-
-    private fun pushStatsToWeb(statsJson: String) {
-        val js = "window.wiseWalkOnStatsUpdate && window.wiseWalkOnStatsUpdate($statsJson);"
-        binding.webView.post {
-            binding.webView.evaluateJavascript(js, null)
-        }
-    }
-
-    private fun pushWaterToWeb(glasses: Int) {
-        // Update the display directly and sync localStorage
-        val js = """
-            (function() {
-                var today = new Date().toISOString().split('T')[0];
-                localStorage.setItem('wisewalk-water-' + today, '$glasses');
-                if (document.getElementById('w-glasses')) {
-                    document.getElementById('w-glasses').textContent = '$glasses';
-                }
-                if (typeof updateWaterDisplay === 'function') {
-                    updateWaterDisplay();
-                }
-            })();
-        """.trimIndent()
-        binding.webView.post {
-            binding.webView.evaluateJavascript(js, null)
-        }
-    }
-
     private fun updateGoalFromProfile(json: String) {
         try {
             val o = JSONObject(json)
-            val sex = o.optString("sex", "M")
-            val heightCm = o.optDouble("heightCm", 170.0)
-            val weightKg = o.optDouble("weightKg", 70.0)
-            val wakeTime = o.optString("wakeTime", "07:00")
-            val sleepTime = o.optString("sleepTime", "23:00")
-            val glassMl = o.optInt("glassMl", 300)
-
-            val goals = o.optJSONObject("goals")
-            val maintainKm = goals?.optDouble("maintainKm", 0.0) ?: 0.0
-            val optimizeKm = goals?.optDouble("optimizeKm", 0.0) ?: 0.0
-            val waterGlasses = goals?.optInt("waterGlasses", 8) ?: 8
-            val plan = o.optString("activePlan", "maintain")
-
             prefs.edit()
-                .putString("profile_sex", sex)
-                .putInt("profile_height_cm", heightCm.toInt())
-                .putFloat("profile_weight_kg", weightKg.toFloat())
-                .putFloat("goal_km_maintain", maintainKm.toFloat())
-                .putFloat("goal_km_optimize", optimizeKm.toFloat())
-                .putInt("water_goal_glasses", waterGlasses)
-                .putInt("glass_ml", glassMl)
-                .putString("wake_time", wakeTime)
-                .putString("sleep_time", sleepTime)
-                .putString("active_plan", plan)
+                .putString("profile_sex", o.optString("sex", "M"))
+                .putInt("profile_height_cm", o.optInt("heightCm", 170))
+                .putFloat("profile_weight_kg", o.optDouble("weightKg", 70.0).toFloat())
+                .putString("wake_time", o.optString("wakeTime", "07:00"))
+                .putString("sleep_time", o.optString("sleepTime", "23:00"))
                 .apply()
 
         } catch (_: Throwable) {}
-    }
-
-    private fun setWaterGlasses(glasses: Int) {
-        val today = java.time.LocalDate.now().toString()
-        prefs.edit().putInt("water_glasses_$today", glasses).apply()
-    }
-    
-    private fun syncWater(glasses: Int) {
-        setWaterGlasses(glasses)
     }
 
     private fun hasPermission(p: String): Boolean {
@@ -311,8 +185,6 @@ class MainActivity : AppCompatActivity() {
         
         if (perms.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, perms.toTypedArray(), PERMISSIONS_REQUEST)
-        } else {
-            startBackgroundTracking()
         }
     }
 
@@ -331,11 +203,6 @@ class MainActivity : AppCompatActivity() {
                 val js = "window.wiseWalkOnPermissionUpdate && window.wiseWalkOnPermissionUpdate($s);"
                 binding.webView.post { binding.webView.evaluateJavascript(js, null) }
                 
-                val activityOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) 
-                    hasPermission(Manifest.permission.ACTIVITY_RECOGNITION) else true
-                if (activityOk) {
-                    startBackgroundTracking()
-                }
             }
             LOCATION_PERMISSION_REQUEST -> {
                 val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
@@ -360,15 +227,11 @@ class MainActivity : AppCompatActivity() {
             startService(serviceIntent)
         }
         
-        binding.webView.postDelayed({
-            updateTrackingStatusToWeb()
-        }, 500)
     }
 
     private fun stopBackgroundTracking() {
         val serviceIntent = Intent(this, StepTrackingService::class.java)
         stopService(serviceIntent)
-        updateTrackingStatusToWeb()
     }
 
     private fun openExternalUrl(url: String) {
@@ -426,14 +289,5 @@ class MainActivity : AppCompatActivity() {
             activity.runOnUiThread { activity.getCurrentLocation() }
         }
 
-        @JavascriptInterface
-        fun setWaterGlasses(glasses: Int) {
-            activity.setWaterGlasses(glasses)
-        }
-        
-        @JavascriptInterface
-        fun syncWater(glasses: Int) {
-            activity.syncWater(glasses)
-        }
     }
 }
