@@ -232,7 +232,7 @@
     let currentRoute=null;
     let previousDestination=null;
     let currentRouteMetrics=null;
-    const WALK_SPEEDS_KMH=[4.0,4.5,5.0,5.5,6.0];
+    const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
 
     const formatDecimal=n=>n.toString().replace('.',',');
     const loadProfile=()=>{try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}};
@@ -370,7 +370,7 @@
       });
     }
 
-    const TARGET_TOTAL_DISTANCE_KM=3.0;
+    const TARGET_TOTAL_DISTANCE_KM=4.0;
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.2;
 
@@ -471,7 +471,7 @@
       }
 
       if(!chosenData||!chosenDestination){
-        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat');
+        throw new Error('No s\'ha pogut generar una ruta de 4 km dins del rang desitjat');
       }
       return {data:chosenData,destination:chosenDestination};
     }
@@ -531,7 +531,7 @@
 
         routeDetails.style.display='flex';
         btnOpenMaps.style.display='block';
-        routeInfo.textContent='Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.';
+        routeInfo.textContent='Ruta generada (4 km aprox.) amb arribada en camí/carrer accessible.';
       }catch(err){
         routeInfo.textContent=err.message||'Error en generar la ruta.';
       }finally{
