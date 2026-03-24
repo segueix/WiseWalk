@@ -63,6 +63,14 @@
     .route-info-text{font-size:.9rem;color:var(--text-soft);text-align:center;padding:.5rem}
     .route-details{display:flex;justify-content:space-around;padding:.75rem;background:var(--accent-light);border-radius:10px;margin:.75rem 0}
     .route-detail{text-align:center}.route-detail-value{font-weight:700;color:var(--accent);font-size:1.1rem}.route-detail-label{font-size:.7rem;color:var(--text-soft)}
+
+    .progress-container{display:flex;justify-content:space-around;gap:.5rem;margin-top:1rem}
+    .progress-item{text-align:center;flex:1}
+    .progress-arc{width:100%;max-width:80px;overflow:visible}
+    .arc-bg{fill:none;stroke:var(--border);stroke-width:8;stroke-linecap:round}
+    .arc-value{fill:none;stroke:var(--accent);stroke-width:8;stroke-linecap:round;stroke-dasharray:125.66;stroke-dashoffset:125.66;transition:stroke-dashoffset .8s ease-out}
+    .progress-label{font-size:.8rem;color:var(--text-soft);margin-top:.25rem}
+    .progress-value{font-size:.85rem;font-weight:600}
     footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
   </style>
 </head>
@@ -93,6 +101,7 @@
           <div class="form-group"><label for="age-setup">Edat</label><div class="input-wrapper"><input type="number" id="age-setup" inputmode="numeric" min="5" max="120" value="35" required><span class="unit">anys</span></div></div>
           <div class="form-group"><label for="height-setup">Alçada</label><div class="input-wrapper"><input type="number" id="height-setup" inputmode="numeric" min="100" max="250" value="170" required><span class="unit">cm</span></div></div>
           <div class="form-group"><label for="weight-setup">Pes</label><div class="input-wrapper"><input type="number" id="weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="70" required><span class="unit">kg</span></div></div>
+          <div class="form-group"><label for="target-weight-setup">Pes objectiu</label><div class="input-wrapper"><input type="number" id="target-weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="65" required><span class="unit">kg</span></div></div>
           <div class="form-group">
             <label>Horari de son</label>
             <div class="time-inputs">
@@ -106,6 +115,41 @@
     </div>
 
     <div id="screen-main" class="screen">
+      <section class="card" id="card-calories">
+        <div class="result-header">
+          <div class="result-icon">🔥</div>
+          <div>
+            <div class="result-title">Pèrdua de pes</div>
+            <div class="result-subtitle" id="total-kcal-to-lose">Calculant...</div>
+          </div>
+        </div>
+        <div class="progress-container">
+           <div class="progress-item">
+             <svg viewBox="0 0 100 50" class="progress-arc">
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-bg" />
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-value" id="arc-day" />
+             </svg>
+             <div class="progress-label">Avui (5km)</div>
+             <div class="progress-value" id="val-day">0 / 0</div>
+           </div>
+           <div class="progress-item">
+             <svg viewBox="0 0 100 50" class="progress-arc">
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-bg" />
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-value" id="arc-week" />
+             </svg>
+             <div class="progress-label">Setmana</div>
+             <div class="progress-value" id="val-week">0 / 0</div>
+           </div>
+           <div class="progress-item">
+             <svg viewBox="0 0 100 50" class="progress-arc">
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-bg" />
+               <path d="M 10,50 A 40,40 0 0,1 90,50" class="arc-value" id="arc-month" />
+             </svg>
+             <div class="progress-label">Mes</div>
+             <div class="progress-value" id="val-month">0 / 0</div>
+           </div>
+        </div>
+      </section>
       <section class="card" id="card-route">
         <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km</div></div></div>
         <div class="route-container">
@@ -142,6 +186,7 @@
           <div class="form-group"><label for="age-config">Edat</label><div class="input-wrapper"><input type="number" id="age-config" inputmode="numeric" min="5" max="120" required><span class="unit">anys</span></div></div>
           <div class="form-group"><label for="height-config">Alçada</label><div class="input-wrapper"><input type="number" id="height-config" inputmode="numeric" min="100" max="250" required><span class="unit">cm</span></div></div>
           <div class="form-group"><label for="weight-config">Pes</label><div class="input-wrapper"><input type="number" id="weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
+          <div class="form-group"><label for="target-weight-config">Pes objectiu</label><div class="input-wrapper"><input type="number" id="target-weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
           <div class="form-group">
             <label>Horari de son</label>
             <div class="time-inputs">
@@ -214,10 +259,12 @@
       document.getElementById('age-config').value=profile.ageYears;
       document.getElementById('height-config').value=profile.heightCm;
       document.getElementById('weight-config').value=profile.weightKg;
+      document.getElementById('target-weight-config').value=profile.targetWeightKg||profile.weightKg;
       document.getElementById('wake-config').value=profile.wakeTime;
       document.getElementById('sleep-config').value=profile.sleepTime;
       document.getElementById(profile.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
       updateConfigSummary();
+      updateCalorieGoals();
     }
 
     function haversineDistance(lat1,lon1,lat2,lon2){
@@ -288,10 +335,64 @@
         ageYears:document.getElementById(`age-${prefix}`).value,
         heightCm:document.getElementById(`height-${prefix}`).value,
         weightKg:document.getElementById(`weight-${prefix}`).value,
+        targetWeightKg:document.getElementById(`target-weight-${prefix}`).value,
         wakeTime:document.getElementById(`wake-${prefix}`).value,
         sleepTime:document.getElementById(`sleep-${prefix}`).value
       });
       updateConfigSummary();
+      updateCalorieGoals();
+    }
+
+    function setArcProgress(arcId,valId,current,total){
+      const arc=document.getElementById(arcId);
+      const val=document.getElementById(valId);
+      val.textContent=`${Math.round(current)} / ${Math.round(total)}`;
+      const maxDash=125.66;
+      let percent=total>0?current/total:0;
+      if(percent>1)percent=1;
+      const offset=maxDash-(percent*maxDash);
+      arc.style.strokeDashoffset=offset;
+    }
+
+    function updateCalorieGoals(){
+      const profile=loadProfile();
+      if(!profile)return;
+      const weight=parseFloat(profile.weightKg);
+      const targetWeight=parseFloat(profile.targetWeightKg)||weight;
+
+      let weightToLose=weight-targetWeight;
+      if(weightToLose<=0)weightToLose=0;
+      const totalKcalToLose=Math.round(weightToLose*7700);
+
+      const titleEl=document.getElementById('total-kcal-to-lose');
+      if(weightToLose>0){
+        titleEl.textContent=`Falten ${totalKcalToLose.toLocaleString('ca')} kcal per l'objectiu`;
+      }else{
+        titleEl.textContent='Objectiu de pes assolit! 🎉';
+      }
+
+      const dailyKcalGoal=weight*0.75*5;
+      const weeklyKcalGoal=dailyKcalGoal*7;
+      const monthlyKcalGoal=dailyKcalGoal*30;
+
+      const history=JSON.parse(localStorage.getItem('wisewalk-kcal-history')||'{}');
+      const today=new Date().toISOString().split('T')[0];
+      const todayKcal=history[today]||0;
+
+      let weekKcal=0;
+      let monthKcal=0;
+      const d=new Date();
+      for(let i=0;i<30;i++){
+        const dateStr=d.toISOString().split('T')[0];
+        const k=history[dateStr]||0;
+        if(i<7)weekKcal+=k;
+        monthKcal+=k;
+        d.setDate(d.getDate()-1);
+      }
+
+      setArcProgress('arc-day','val-day',todayKcal,dailyKcalGoal);
+      setArcProgress('arc-week','val-week',weekKcal,weeklyKcalGoal);
+      setArcProgress('arc-month','val-month',monthKcal,monthlyKcalGoal);
     }
 
     window.wiseWalkSetLocation=function(lat,lng){
@@ -328,7 +429,12 @@
     setTheme(savedTheme||(prefersDark?'dark':'light'));
     setColorTheme(localStorage.getItem('wisewalk-color')||'green');
     updateConfigSummary();
-    showScreen(loadProfile()?'main':'setup');
+    if(loadProfile()){
+      updateCalorieGoals();
+      showScreen('main');
+    }else{
+      showScreen('setup');
+    }
   </script>
 </body>
 </html>
