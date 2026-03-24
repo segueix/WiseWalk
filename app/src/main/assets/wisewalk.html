@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="ca">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#f8f6f1">
-  <title>WiseWalk</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300;8..144,400;8..144,500;8..144,700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#F0F2F5" />
+  <title>Kalometres</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root{--bg:#f8f6f1;--bg-card:#fff;--text:#2d3a3a;--text-soft:#5a6b6b;--accent:#3d7a6b;--accent-light:#e8f2ef;--accent-warm:#d4a574;--border:#e0ddd5;--shadow:rgba(45,58,58,.08);--input-bg:#f8f6f1;--toggle-bg:#e0ddd5}
     [data-theme="dark"]{--bg:#1a1d1d;--bg-card:#252a2a;--text:#e8e6e1;--text-soft:#9ca8a8;--accent:#5cb89f;--accent-light:#2a3d38;--accent-warm:#e4b584;--border:#3a4040;--shadow:rgba(0,0,0,.3);--input-bg:#1a1d1d;--toggle-bg:#3a4040}
@@ -239,185 +240,354 @@
       metaTheme.setAttribute('content',theme==='dark'?'#1a1d1d':'#f8f6f1');
     }
 
-    function updateColorSelector(){
-      const current=localStorage.getItem('wisewalk-color')||'green';
-      document.querySelectorAll('.color-option').forEach(el=>el.classList.toggle('active',el.dataset.color===current));
+    .app { max-width: 460px; margin: 0 auto; }
+
+    .card {
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-soft);
+      padding: 22px;
+      margin-bottom: 14px;
     }
 
-    function setColorTheme(color){
-      html.setAttribute('data-color',color);
-      localStorage.setItem('wisewalk-color',color);
-      updateColorSelector();
+    .hidden { display: none !important; }
+
+    h1 { font-size: 1.8rem; font-weight: 700; }
+    h2 { font-size: 1.2rem; font-weight: 600; }
+    p  { color: var(--muted); }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding: 4px;
     }
 
-    function showScreen(name){
-      [screenSetup,screenMain,screenConfig].forEach(screen=>screen.classList.remove('active'));
-      if(name==='setup')screenSetup.classList.add('active');
-      if(name==='main') {
-        screenMain.classList.add('active');
-        refreshDailyGoalUI();
+    .badge {
+      background: rgba(118, 75, 162, 0.12);
+      color: #5b3f88;
+      font-size: .8rem;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 7px 12px;
+    }
+
+    .progress-wrap { display: grid; place-items: center; margin: 20px 0 10px; }
+
+    .progress-ring {
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: conic-gradient(#667eea 0deg, #764ba2 0deg, #dbe1f4 0deg);
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 8px rgba(255,255,255,0.4);
+      position: relative;
+      transition: background .35s ease;
+    }
+
+    .progress-ring::before {
+      content: '';
+      position: absolute;
+      width: 172px;
+      height: 172px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.96);
+      box-shadow: inset 0 5px 20px rgba(25, 45, 95, .08);
+    }
+
+    .progress-center { position: relative; text-align: center; z-index: 2; }
+    .kcal-left { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .kcal-label { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 16px;
+      padding: 15px 18px;
+      margin-top: 10px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease, opacity .2s ease;
+      box-shadow: var(--shadow-soft);
+      background: var(--accent);
+    }
+
+    .btn:active { transform: translateY(1px) scale(.99); box-shadow: var(--shadow-press); }
+    .btn[disabled] { opacity: .55; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: rgba(255,255,255,.9);
+      color: var(--text);
+      border: 1px solid rgba(121, 137, 173, .28);
+    }
+
+    .btn-success { background: var(--success); }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    label { font-size: .86rem; color: var(--muted); margin-bottom: 6px; display: block; }
+    input, select {
+      width: 100%;
+      border: 1px solid #d7dff2;
+      border-radius: 14px;
+      padding: 11px 12px;
+      font-family: inherit;
+      font-size: .96rem;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .route-stats {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 14px;
+      background: rgba(102, 126, 234, 0.09);
+      display: grid;
+      gap: 6px;
+      font-size: .95rem;
+    }
+
+    .formula-box {
+      margin-top: 12px;
+      background: rgba(255,255,255,0.72);
+      border: 1px dashed rgba(90, 105, 140, .34);
+      border-radius: 14px;
+      padding: 12px;
+      font-size: .84rem;
+      color: #5A6580;
+      line-height: 1.45;
+    }
+
+    #confetti {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      display: none;
+      z-index: 9999;
+      overflow: hidden;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      width: 8px;
+      height: 14px;
+      opacity: .95;
+      top: -20px;
+      animation: drop 1400ms linear forwards;
+    }
+
+    @keyframes drop {
+      to { transform: translateY(110vh) rotate(680deg); opacity: .75; }
+    }
+  </style>
+</head>
+<body>
+  <div id="confetti"></div>
+  <main class="app">
+    <section id="screen-setup" class="card hidden">
+      <h1>Configura Kalometres</h1>
+      <p style="margin:8px 0 16px;">Defineix el teu perfil per calcular l'objectiu diari (5 KM).</p>
+      <form id="form-setup">
+        <div class="row">
+          <div>
+            <label for="sex">Sexe</label>
+            <select id="sex">
+              <option value="M">Home</option>
+              <option value="F">Dona</option>
+            </select>
+          </div>
+          <div>
+            <label for="age">Edat</label>
+            <input id="age" type="number" min="5" max="120" value="35" required />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label for="height">Alçada (cm)</label>
+            <input id="height" type="number" min="100" max="250" value="170" required />
+          </div>
+          <div>
+            <label for="weight">Pes (kg)</label>
+            <input id="weight" type="number" min="30" max="300" step="0.1" value="70" required />
+          </div>
+        </div>
+        <button type="submit" class="btn">Desar perfil i començar</button>
+      </form>
+    </section>
+
+    <section id="screen-main" class="hidden">
+      <div class="topbar">
+        <div>
+          <h1>Kalometres</h1>
+          <p>Mercador diari de Kcal</p>
+        </div>
+        <span class="badge" id="merchant-state">Objectiu actiu</span>
+      </div>
+
+      <article class="card">
+        <h2>Progrés d'avui</h2>
+        <div class="progress-wrap">
+          <div class="progress-ring" id="progress-ring">
+            <div class="progress-center">
+              <div class="kcal-left" id="kcal-left">0</div>
+              <div class="kcal-label">Kcal restants</div>
+            </div>
+          </div>
+        </div>
+        <p style="text-align:center; margin-top:6px;"><strong id="goal-text">0</strong> objectiu diari (equivalent a caminar 5 KM)</p>
+      </article>
+
+      <article class="card">
+        <h2>Ruta d'avui</h2>
+        <p id="route-info" style="margin-top:8px;">Genera una ruta basada en les Kcal que et queden.</p>
+        <div id="route-stats" class="route-stats hidden">
+          <div><strong>Distància total:</strong> <span id="stat-distance">-</span></div>
+          <div><strong>Temps estimat:</strong> <span id="stat-time">-</span></div>
+          <div><strong>Kcal ruta:</strong> <span id="stat-kcal">-</span></div>
+          <div><strong>Distància a destí:</strong> <span id="distance-destination">-</span></div>
+        </div>
+
+        <button id="btn-generate-route" class="btn">Generar Ruta</button>
+        <button id="btn-open-maps" class="btn btn-secondary hidden">Obrir a Google Maps</button>
+        <button id="btn-claim" class="btn btn-success hidden" disabled>RECLAMAR KCAL</button>
+
+        <div class="formula-box">
+          <strong>Fórmules de Kcal (segons ritme):</strong><br>
+          • Ritme suau (~4 km/h): kcal ≈ km × pes × 0.65<br>
+          • Ritme moderat (~5 km/h): kcal ≈ km × pes × 0.75<br>
+          • Ritme ràpid (~6.5 km/h): kcal ≈ km × pes × 0.90
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const PROFILE_KEY = 'wisewalk-profile';
+    const GOAL_KEY = 'objectiuKcalDiari';
+    const REMAINING_KEY = 'kcalRestantsAvui';
+    const DAY_KEY = 'wisewalk-day';
+    const WALK_KM_OBJECTIVE = 5;
+    const DEFAULT_MET = 0.75;
+
+    const screenSetup = document.getElementById('screen-setup');
+    const screenMain = document.getElementById('screen-main');
+    const formSetup = document.getElementById('form-setup');
+
+    const routeInfo = document.getElementById('route-info');
+    const routeStats = document.getElementById('route-stats');
+    const btnGenerateRoute = document.getElementById('btn-generate-route');
+    const btnOpenMaps = document.getElementById('btn-open-maps');
+    const btnClaim = document.getElementById('btn-claim');
+
+    const goalText = document.getElementById('goal-text');
+    const kcalLeft = document.getElementById('kcal-left');
+    const progressRing = document.getElementById('progress-ring');
+    const merchantState = document.getElementById('merchant-state');
+    const distanceDestination = document.getElementById('distance-destination');
+
+    let currentLocation = null;
+    let currentRoute = null;
+
+    const getTodayKey = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const loadProfile = () => {
+      try { return JSON.parse(localStorage.getItem(PROFILE_KEY)); }
+      catch (_) { return null; }
+    };
+
+    const saveProfile = (profile) => localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+
+    const calculateKcalByDistance = (km, weightKg, met = DEFAULT_MET) => km * Math.max(30, Number(weightKg) || 70) * met;
+
+    const ensureDailyState = () => {
+      const profile = loadProfile();
+      if (!profile) return;
+
+      const objectiu = Math.round(calculateKcalByDistance(WALK_KM_OBJECTIVE, profile.weightKg));
+      localStorage.setItem(GOAL_KEY, String(objectiu));
+
+      const today = getTodayKey();
+      const savedDay = localStorage.getItem(DAY_KEY);
+      if (savedDay !== today || localStorage.getItem(REMAINING_KEY) == null) {
+        localStorage.setItem(REMAINING_KEY, String(objectiu));
+        localStorage.setItem(DAY_KEY, today);
       }
-      if(name==='config')screenConfig.classList.add('active');
-    }
+    };
 
-    function updateConfigSummary(){
-      const profile=loadProfile();
-      document.getElementById('cfg-profile-status').textContent=profile?'Desat':'Pendent';
-      document.getElementById('cfg-schedule').textContent=profile?`${profile.wakeTime} - ${profile.sleepTime}`:'—';
-    }
+    const getGoalKcal = () => Number(localStorage.getItem(GOAL_KEY) || 0);
+    const getRemainingKcal = () => Math.max(0, Number(localStorage.getItem(REMAINING_KEY) || 0));
 
-    function resolveDailyKcalGoal(profile){
-      if(!profile)return 150;
-      if(profile.mainGoal==='lose_weight'){
-        const kg=Math.min(20,Math.max(1,Number(profile.weightLossKg)||2));
-        if(kg<=3)return 250;
-        if(kg<=8)return 300;
-        return 350;
-      }
-      return 150;
-    }
+    const setRemainingKcal = (kcal) => {
+      localStorage.setItem(REMAINING_KEY, String(Math.max(0, Math.round(kcal))));
+      renderMerchant();
+    };
 
-    function getMotivationalMessage(kcal,goal){
-      if(kcal<=0)return 'Llest per la teva primera caminada d\'avui?';
-      if(kcal<goal)return 'Bona feina! Has cremat l\'equivalent a un snack.';
-      return 'Objectiu diari assolit! Ets imparable! 🎉';
-    }
+    const renderMerchant = () => {
+      const goal = getGoalKcal();
+      const remaining = getRemainingKcal();
+      const doneRatio = goal > 0 ? (goal - remaining) / goal : 0;
+      const progressDeg = Math.max(0, Math.min(360, Math.round(doneRatio * 360)));
 
-    function getTodayKey(){
-      const d=new Date();
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    }
+      progressRing.style.background = `conic-gradient(#667eea ${progressDeg}deg, #764ba2 ${progressDeg}deg, #dbe1f4 ${progressDeg}deg)`;
+      kcalLeft.textContent = `${Math.round(remaining)}`;
+      goalText.textContent = `${Math.round(remaining)} / ${Math.round(goal)} kcal`;
 
-    function computeStreak(profile,metGoalToday){
-      const today=getTodayKey();
-      if(!profile)return 0;
-      if(profile.streakDate!==today){
-        const yesterday=new Date();
-        yesterday.setDate(yesterday.getDate()-1);
-        const yesterdayKey=`${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-        if(profile.streakDate!==yesterdayKey){
-          profile.streakDays=0;
-        }
-      }
-      if(metGoalToday&&profile.streakDate!==today){
-        profile.streakDays=(profile.streakDays||0)+1;
-        profile.streakDate=today;
-        saveProfile(profile);
-      }
-      return profile.streakDays||0;
-    }
+      merchantState.textContent = remaining <= 0
+        ? 'Objectiu completat 🎉'
+        : remaining === goal
+          ? 'Objectiu complet pendent'
+          : 'Objectiu en progrés';
+    };
 
-    function refreshDailyGoalUI(){
-      const profile=loadProfile();
-      const dailyGoal=resolveDailyKcalGoal(profile);
-      const burned=Math.max(0,Number(currentStats.kcal)||0);
-      const progress=Math.min(100,Math.round((burned/dailyGoal)*100));
-      const metGoalToday=burned>=dailyGoal;
-      const streak=computeStreak(profile,metGoalToday);
+    const haversineMeters = (lat1, lon1, lat2, lon2) => {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
 
-      const bar=document.getElementById('kcal-progress-bar');
-      const text=document.getElementById('kcal-progress-text');
-      const dailyGoalValue=document.getElementById('daily-goal-value');
-      const streakCounter=document.getElementById('streak-counter');
-      const message=document.getElementById('motivational-message');
-      if(!bar||!text||!dailyGoalValue||!streakCounter||!message)return;
+    const buildCandidatePoints = (start, oneWayKm) => {
+      const bearings = [0, 60, 120, 180, 240, 300];
+      const earthRadiusKm = 6371;
+      const latRad = start.lat * Math.PI / 180;
+      const angularDistance = oneWayKm / earthRadiusKm;
 
-      bar.style.width=progress+'%';
-      text.textContent=`${Math.round(burned)} / ${dailyGoal} kcal`;
-      dailyGoalValue.textContent=`${dailyGoal} kcal`;
-      streakCounter.textContent=`🔥 ${streak} dies seguits`;
-      message.textContent=getMotivationalMessage(burned,dailyGoal);
-    }
-
-    function loadConfigForm(){
-      const profile=loadProfile();
-      if(!profile)return;
-      document.getElementById('age-config').value=profile.ageYears;
-      document.getElementById('height-config').value=profile.heightCm;
-      document.getElementById('weight-config').value=profile.weightKg;
-      document.getElementById('wake-config').value=profile.wakeTime;
-      document.getElementById('sleep-config').value=profile.sleepTime;
-      document.getElementById(profile.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
-      document.getElementById('goal-config').value=profile.mainGoal||'stay_active';
-      document.getElementById('weight-loss-config').value=profile.weightLossKg||2;
-      toggleGoalFields('config');
-      updateConfigSummary();
-    }
-
-    function toggleGoalFields(prefix){
-      const goal=document.getElementById(`goal-${prefix}`).value;
-      const group=document.getElementById(`${prefix}-weight-loss-group`);
-      const input=document.getElementById(`weight-loss-${prefix}`);
-      const loseWeight=goal==='lose_weight';
-      group.classList.toggle('hidden',!loseWeight);
-      input.disabled=!loseWeight;
-    }
-
-    function haversineDistance(lat1,lon1,lat2,lon2){
-      const R=6371;
-      const dLat=(lat2-lat1)*Math.PI/180;
-      const dLon=(lon2-lon1)*Math.PI/180;
-      const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-      return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-    }
-
-    function setRouteUserLocation(lat,lng){
-      userLocation={lat,lng};
-      routeInfo.textContent='Ubicació obtinguda! Genera una ruta.';
-    }
-
-    function getLocation(){
-      routeInfo.textContent='Obtenint ubicació...';
-      if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
-        WiseWalkAndroid.getLocation();
-        return;
-      }
-      if('geolocation' in navigator){
-        navigator.geolocation.getCurrentPosition(
-          pos=>setRouteUserLocation(pos.coords.latitude,pos.coords.longitude),
-          err=>{routeInfo.textContent='Error ubicació: '+err.message;},
-          {enableHighAccuracy:true,timeout:15000}
+      return bearings.map((bearingDeg) => {
+        const bearing = bearingDeg * Math.PI / 180;
+        const endLatRad = Math.asin(
+          Math.sin(latRad) * Math.cos(angularDistance) +
+          Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)
         );
-        return;
-      }
-      routeInfo.textContent='Geolocalització no disponible';
-    }
-
-    function buildCandidatePoints(oneWayDistanceKm){
-      const lat=userLocation.lat;
-      const lng=userLocation.lng;
-      const earthRadiusKm=6371;
-      const latRad=lat*Math.PI/180;
-      const angularDistance=oneWayDistanceKm/earthRadiusKm;
-      const bearings=[0,90,180,270];
-
-      return bearings.map(bearingDeg=>{
-        const bearing=bearingDeg*Math.PI/180;
-        const endLatRad=Math.asin(
-          Math.sin(latRad)*Math.cos(angularDistance)+
-          Math.cos(latRad)*Math.sin(angularDistance)*Math.cos(bearing)
+        const endLngRad = (start.lng * Math.PI / 180) + Math.atan2(
+          Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
+          Math.cos(angularDistance) - Math.sin(latRad) * Math.sin(endLatRad)
         );
-        const endLngRad=(lng*Math.PI/180)+Math.atan2(
-          Math.sin(bearing)*Math.sin(angularDistance)*Math.cos(latRad),
-          Math.cos(angularDistance)-Math.sin(latRad)*Math.sin(endLatRad)
-        );
-        return {
-          lat:endLatRad*180/Math.PI,
-          lng:endLngRad*180/Math.PI
-        };
+
+        return { lat: endLatRad * 180 / Math.PI, lng: endLngRad * 180 / Math.PI };
       });
-    }
+    };
 
-    async function fetchOsrmRoute(start,end){
-      const url=`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=false`;
-      const response=await fetch(url);
-      if(!response.ok)throw new Error(`OSRM ${response.status}`);
-      const data=await response.json();
-      if(data.code!=='Ok'||!data.routes?.length||!data.waypoints?.[1]?.location){
-        throw new Error('Resposta OSRM invàlida');
+    const fetchOsrmRoute = async (start, end) => {
+      const url = `https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=false`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`OSRM ${res.status}`);
+      const data = await res.json();
+      if (data.code !== 'Ok' || !data.routes?.length || !data.waypoints?.[1]?.location) {
+        throw new Error('OSRM route error');
       }
       return data;
-    }
+    };
 
     function getKcalBySpeed(totalDistanceKm){
       const profile=loadProfile();
@@ -479,9 +649,9 @@
       routeInfo.textContent='Ruta aproximada generada (mode offline).';
     }
 
-    async function generateRealRoute(targetDistanceKm=1.5){
-      if(!userLocation){
-        getLocation();
+    const generateRoute = async () => {
+      if (!currentLocation) {
+        routeInfo.textContent = 'Encara no tenim ubicació. Android ha de cridar updateCurrentLocation(lat, lng).';
         return;
       }
 
@@ -494,14 +664,15 @@
           candidates.map(candidate=>fetchOsrmRoute(userLocation,candidate))
         );
 
-        const validRoutes=osrmResponses
-          .filter(result=>result.status==='fulfilled')
-          .map(result=>result.value)
-          .filter(data=>data.code==='Ok'&&data.routes?.[0]&&data.waypoints?.[1]?.location);
+      try {
+        const candidates = buildCandidatePoints(currentLocation, oneWayKm);
+        const settled = await Promise.allSettled(candidates.map((p) => fetchOsrmRoute(currentLocation, p)));
+        const valid = settled
+          .filter((r) => r.status === 'fulfilled')
+          .map((r) => r.value)
+          .filter((data) => data.routes?.[0] && data.waypoints?.[1]?.location);
 
-        if(!validRoutes.length){
-          throw new Error('No hi ha rutes vàlides disponibles');
-        }
+        if (!valid.length) throw new Error('No valid routes');
 
         const targetMeters=targetDistanceKm*1000;
         const best=validRoutes.reduce((closest,current)=>{
@@ -510,115 +681,131 @@
           return currentDiff<closestDiff?current:closest;
         });
 
-        const snapped=best.waypoints[1].location;
-        const route=best.routes[0];
-        const oneWayDistanceKm=route.distance/1000;
-        const totalDistKm=oneWayDistanceKm*2;
-        const totalDurationMin=(route.duration*2)/60;
+        const snapped = best.waypoints[1].location;
+        const oneWayRealKm = best.routes[0].distance / 1000;
+        const totalKm = oneWayRealKm * 2;
+        const totalMinutes = (best.routes[0].duration * 2) / 60;
+        const weight = Number(loadProfile()?.weightKg || 70);
 
-        currentRoute={
-          start:{...userLocation},
-          end:{lat:snapped[1],lng:snapped[0]}
+        currentRoute = {
+          startLat: currentLocation.lat,
+          startLng: currentLocation.lng,
+          snappedLat: snapped[1],
+          snappedLng: snapped[0],
+          totalKm,
+          totalMinutes,
+          estimatedKcal: calculateKcalByDistance(totalKm, weight),
+          arrived: false
         };
 
-        renderRouteMetrics(totalDistKm,totalDurationMin);
-        routeInfo.textContent='Ruta real generada! Distància basada en camins.';
-      }catch(err){
-        console.warn('OSRM no disponible, fent servir fallback:',err);
-        routeInfo.textContent='No s\'ha pogut calcular una ruta real. Generant ruta aproximada...';
-        generateFallbackRoute(targetDistanceKm);
-      }finally{
-        btnGenerateRoute.disabled=false;
+        renderRouteStats(currentRoute);
+        routeInfo.textContent = 'Ruta activa. Camina fins al destí. Quan estiguis a <20m, podràs reclamar.';
+      } catch (err) {
+        routeInfo.textContent = `No s'ha pogut generar ruta real (${err.message}).`;
+        clearRouteState(routeInfo.textContent);
+      } finally {
+        btnGenerateRoute.disabled = false;
       }
-    }
+    };
 
-    function openInGoogleMaps(){
-      if(!currentRoute)return;
-      const url='https://www.google.com/maps/dir/?api=1&origin='+currentRoute.start.lat+','+currentRoute.start.lng+'&destination='+currentRoute.end.lat+','+currentRoute.end.lng+'&travelmode=walking';
-      if(window.WiseWalkAndroid&&WiseWalkAndroid.openUrl)WiseWalkAndroid.openUrl(url);
-      else window.open(url,'_blank');
-    }
+    const openMaps = () => {
+      if (!currentRoute) return;
+      const url = `https://www.google.com/maps/dir/?api=1&origin=${currentRoute.startLat},${currentRoute.startLng}&destination=${currentRoute.snappedLat},${currentRoute.snappedLng}&travelmode=walking`;
+      if (window.WiseWalkAndroid?.openUrl) window.WiseWalkAndroid.openUrl(url);
+      else window.open(url, '_blank');
+    };
 
-    function saveProfileFromForm(prefix){
-      const sex=document.querySelector(`input[name="sex-${prefix}"]:checked`).value;
+    const launchConfetti = () => {
+      const root = document.getElementById('confetti');
+      root.innerHTML = '';
+      root.style.display = 'block';
+      const colors = ['#667eea', '#764ba2', '#25c481', '#f5b942', '#ff6f91'];
+
+      for (let i = 0; i < 70; i++) {
+        const piece = document.createElement('span');
+        piece.className = 'confetti-piece';
+        piece.style.left = `${Math.random() * 100}vw`;
+        piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDelay = `${Math.random() * 320}ms`;
+        piece.style.transform = `translateY(0) rotate(${Math.random() * 360}deg)`;
+        root.appendChild(piece);
+      }
+
+      setTimeout(() => { root.style.display = 'none'; root.innerHTML = ''; }, 1800);
+    };
+
+    const claimKcal = () => {
+      if (!currentRoute || !currentRoute.arrived) return;
+      const remainingBefore = getRemainingKcal();
+      const remainingAfter = remainingBefore - currentRoute.estimatedKcal;
+      setRemainingKcal(remainingAfter);
+
+      const burned = Math.max(0, Math.round(remainingBefore - getRemainingKcal()));
+      clearRouteState(`✅ Reclamades ${burned} kcal. Gran feina!`);
+      launchConfetti();
+    };
+
+    const evaluateArrival = () => {
+      if (!currentRoute || !currentLocation) return;
+      const distanceM = haversineMeters(
+        currentLocation.lat,
+        currentLocation.lng,
+        currentRoute.snappedLat,
+        currentRoute.snappedLng
+      );
+
+      distanceDestination.textContent = `${Math.round(distanceM)} m`;
+
+      if (distanceM < 20) {
+        currentRoute.arrived = true;
+        routeInfo.textContent = '🎯 Has arribat al destí! Ja pots reclamar les Kcal.';
+        btnOpenMaps.classList.add('hidden');
+        btnClaim.classList.remove('hidden');
+        btnClaim.disabled = false;
+      }
+    };
+
+    window.updateCurrentLocation = (lat, lng) => {
+      const parsedLat = Number(lat);
+      const parsedLng = Number(lng);
+      if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return;
+      currentLocation = { lat: parsedLat, lng: parsedLng };
+      if (!currentRoute) {
+        routeInfo.textContent = 'Ubicació rebuda. Ja pots generar la ruta.';
+      }
+      evaluateArrival();
+    };
+
+    const init = () => {
+      const profile = loadProfile();
+      if (profile) {
+        ensureDailyState();
+        screenMain.classList.remove('hidden');
+      } else {
+        screenSetup.classList.remove('hidden');
+      }
+      renderMerchant();
+    };
+
+    formSetup.addEventListener('submit', (e) => {
+      e.preventDefault();
       saveProfile({
-        sex,
-        ageYears:document.getElementById(`age-${prefix}`).value,
-        heightCm:document.getElementById(`height-${prefix}`).value,
-        weightKg:document.getElementById(`weight-${prefix}`).value,
-        mainGoal:document.getElementById(`goal-${prefix}`).value,
-        weightLossKg:Math.min(20,Math.max(1,Number(document.getElementById(`weight-loss-${prefix}`).value)||2)),
-        wakeTime:document.getElementById(`wake-${prefix}`).value,
-        sleepTime:document.getElementById(`sleep-${prefix}`).value,
-        streakDays:loadProfile()?.streakDays||0,
-        streakDate:loadProfile()?.streakDate||null
+        sex: document.getElementById('sex').value,
+        ageYears: Number(document.getElementById('age').value),
+        heightCm: Number(document.getElementById('height').value),
+        weightKg: Number(document.getElementById('weight').value)
       });
-      updateConfigSummary();
-      refreshDailyGoalUI();
-    }
-
-    function applyStatsUpdate(payload){
-      const stats=payload||{};
-      currentStats={
-        steps:Number(stats.steps)||0,
-        kcal:Number(stats.kcal ?? stats.kcalBurned ?? currentStats.kcal)||0,
-        date:stats.date||getTodayKey()
-      };
-      refreshDailyGoalUI();
-    }
-
-    window.wiseWalkSetLocation=function(lat,lng){
-      setRouteUserLocation(lat,lng);
-    };
-
-    window.wiseWalkUpdateStats=function(payload){
-      if(typeof payload==='string'){
-        try{applyStatsUpdate(JSON.parse(payload));}
-        catch(_){applyStatsUpdate({});}
-        return;
-      }
-      applyStatsUpdate(payload);
-    };
-
-    window.addEventListener('ACTION_STATS_UPDATE',e=>{
-      applyStatsUpdate(e.detail||{});
+      ensureDailyState();
+      screenSetup.classList.add('hidden');
+      screenMain.classList.remove('hidden');
+      renderMerchant();
     });
 
-    formSetup.addEventListener('submit',e=>{
-      e.preventDefault();
-      saveProfileFromForm('setup');
-      showScreen('main');
-    });
+    btnGenerateRoute.addEventListener('click', generateRoute);
+    btnOpenMaps.addEventListener('click', openMaps);
+    btnClaim.addEventListener('click', claimKcal);
 
-    formConfig.addEventListener('submit',e=>{
-      e.preventDefault();
-      saveProfileFromForm('config');
-      showScreen('main');
-    });
-
-    btnConfig.addEventListener('click',()=>{
-      loadConfigForm();
-      showScreen('config');
-    });
-    btnBack.addEventListener('click',()=>showScreen('main'));
-    btnGenerateRoute.addEventListener('click',()=>generateRealRoute(1.5));
-    btnOpenMaps.addEventListener('click',openInGoogleMaps);
-    themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
-    document.getElementById('goal-setup').addEventListener('change',()=>toggleGoalFields('setup'));
-    document.getElementById('goal-config').addEventListener('change',()=>toggleGoalFields('config'));
-    document.getElementById('color-selector').addEventListener('click',e=>{
-      const option=e.target.closest('.color-option');
-      if(option)setColorTheme(option.dataset.color);
-    });
-
-    const savedTheme=localStorage.getItem('wisewalk-theme');
-    const prefersDark=window.matchMedia('(prefers-color-scheme:dark)').matches;
-    setTheme(savedTheme||(prefersDark?'dark':'light'));
-    setColorTheme(localStorage.getItem('wisewalk-color')||'green');
-    toggleGoalFields('setup');
-    updateConfigSummary();
-    showScreen(loadProfile()?'main':'setup');
-    refreshDailyGoalUI();
+    init();
   </script>
 </body>
 </html>
