@@ -72,6 +72,12 @@
     .route-info-text{font-size:.9rem;color:var(--text-soft);text-align:center;padding:.5rem}
     .route-details{display:flex;justify-content:space-around;padding:.75rem;background:var(--accent-light);border-radius:10px;margin:.75rem 0}
     .route-detail{text-align:center}.route-detail-value{font-weight:700;color:var(--accent);font-size:1.1rem}.route-detail-label{font-size:.7rem;color:var(--text-soft)}
+    .route-kcal-speeds{margin-top:.75rem;padding:.75rem;background:var(--accent-light);border-radius:10px;display:none}
+    .route-kcal-title{font-size:.8rem;color:var(--text-soft);margin-bottom:.5rem;text-align:center}
+    .route-kcal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+    .route-kcal-item{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;text-align:center}
+    .route-kcal-speed{font-size:.8rem;color:var(--text-soft)}
+    .route-kcal-value{font-weight:700;color:var(--accent)}
     footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
   </style>
 </head>
@@ -147,6 +153,7 @@
             <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps estimat</div></div>
             <div class="route-detail"><div class="route-detail-value" id="route-kcal">— kcal</div><div class="route-detail-label">kcal estimades</div></div>
           </div>
+          <div class="route-kcal-speeds" id="route-kcal-speeds"></div>
           <button class="btn btn-small" id="btn-generate-route">🎲 Generar ruta</button>
           <button class="btn btn-secondary btn-small" id="btn-open-maps" style="display:none">📍 Obrir a Google Maps</button>
         </div>
@@ -213,6 +220,7 @@
     const themeToggle=document.getElementById('themeToggle');
     const routeInfo=document.getElementById('route-info');
     const routeDetails=document.getElementById('route-details');
+    const routeKcalSpeeds=document.getElementById('route-kcal-speeds');
     const btnGenerateRoute=document.getElementById('btn-generate-route');
     const btnOpenMaps=document.getElementById('btn-open-maps');
     const html=document.documentElement;
@@ -411,20 +419,52 @@
       return data;
     }
 
-    function renderRouteMetrics(totalDistKm,totalDurationMin){
+    function getKcalBySpeed(totalDistanceKm){
       const profile=loadProfile();
       const userWeight=Math.max(30,Number(profile?.weightKg)||70);
-      const kcalEstimated=Math.round(totalDistKm*userWeight*0.75);
+      const speedMetList=[
+        {speed:4,met:3.0},
+        {speed:5,met:3.5},
+        {speed:6,met:4.3},
+        {speed:7,met:5.3}
+      ];
+      return speedMetList.map(item=>{
+        const timeHours=totalDistanceKm/item.speed;
+        const kcal=Math.round(item.met*userWeight*timeHours);
+        return {...item,kcal};
+      });
+    }
+
+    function renderRouteSpeedKcal(totalDistanceKm){
+      const kcalItems=getKcalBySpeed(totalDistanceKm);
+      routeKcalSpeeds.innerHTML=`
+        <div class="route-kcal-title">Kcal totals (anada + tornada) segons ritme</div>
+        <div class="route-kcal-grid">
+          ${kcalItems.map(item=>`
+            <div class="route-kcal-item">
+              <div class="route-kcal-speed">${item.speed} km/h</div>
+              <div class="route-kcal-value">~${item.kcal} kcal</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      routeKcalSpeeds.style.display='block';
+      return kcalItems;
+    }
+
+    function renderRouteMetrics(totalDistKm,totalDurationMin){
+      const kcalBySpeed=renderRouteSpeedKcal(totalDistKm);
+      const kcalAtFive=kcalBySpeed.find(item=>item.speed===5)?.kcal||0;
       document.getElementById('route-distance').textContent=formatDecimal((Math.round(totalDistKm*10)/10).toFixed(1))+' km';
       document.getElementById('route-time').textContent='~'+Math.round(totalDurationMin)+' min';
-      document.getElementById('route-kcal').textContent='~'+kcalEstimated+' kcal';
+      document.getElementById('route-kcal').textContent='~'+kcalAtFive+' kcal';
       routeDetails.style.display='flex';
       btnOpenMaps.style.display='block';
     }
 
     function generateFallbackRoute(targetDistanceKm=1.5){
       const angle=Math.random()*2*Math.PI;
-      const d=(targetDistanceKm/2)/111;
+      const d=targetDistanceKm/111;
       const offset=(Math.random()-0.5)*0.0015;
       const perpAngle=angle+Math.PI/2;
       const dest={
@@ -445,12 +485,11 @@
         return;
       }
 
-      const oneWayTargetKm=targetDistanceKm/2;
       routeInfo.textContent='Calculant rutes reals...';
       btnGenerateRoute.disabled=true;
 
       try{
-        const candidates=buildCandidatePoints(oneWayTargetKm);
+        const candidates=buildCandidatePoints(targetDistanceKm);
         const osrmResponses=await Promise.allSettled(
           candidates.map(candidate=>fetchOsrmRoute(userLocation,candidate))
         );
@@ -464,7 +503,7 @@
           throw new Error('No hi ha rutes vàlides disponibles');
         }
 
-        const targetMeters=oneWayTargetKm*1000;
+        const targetMeters=targetDistanceKm*1000;
         const best=validRoutes.reduce((closest,current)=>{
           const currentDiff=Math.abs(current.routes[0].distance-targetMeters);
           const closestDiff=Math.abs(closest.routes[0].distance-targetMeters);
