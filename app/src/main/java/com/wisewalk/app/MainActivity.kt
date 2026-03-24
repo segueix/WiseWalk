@@ -12,8 +12,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
+import android.util.Log
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -34,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+    private var locationCallback: LocationCallback? = null
 
     private val statsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -42,13 +45,13 @@ class MainActivity : AppCompatActivity() {
             if (intent.getBooleanExtra("water_update", false)) {
                 val glasses = intent.getIntExtra("water_glasses", 0)
                 val js = "window.wiseWalkUpdateStats && window.wiseWalkUpdateStats({waterGlasses:$glasses});"
-                binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+                evaluateJs(js)
                 return
             }
 
             val json = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON) ?: return
             val js = "window.wiseWalkUpdateStats && window.wiseWalkUpdateStats($json);"
-            binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+            evaluateJs(js)
         }
     }
 
@@ -63,7 +66,17 @@ class MainActivity : AppCompatActivity() {
 
         val wv: WebView = binding.webView
 
-        wv.webViewClient = WebViewClient()
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString().orEmpty()
+                return if (url.startsWith("http://") || url.startsWith("https://")) {
+                    openExternalUrl(url)
+                    true
+                } else {
+                    false
+                }
+            }
+        }
         
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
@@ -117,7 +130,22 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        try { unregisterReceiver(statsReceiver) } catch (_: Exception) {}
+        try {
+            unregisterReceiver(statsReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Stats receiver was not registered when pausing.", e)
+        }
+    }
+
+    override fun onDestroy() {
+        locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
+        locationCallback = null
+        binding.webView.removeJavascriptInterface("WiseWalkAndroid")
+        binding.webView.stopLoading()
+        binding.webView.webChromeClient = null
+        binding.webView.webViewClient = null
+        binding.webView.destroy()
+        super.onDestroy()
     }
     
     private fun hasLocationPermission(): Boolean {
@@ -138,26 +166,33 @@ class MainActivity : AppCompatActivity() {
             requestLocationPermission()
             return
         }
-        
+
+        locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
             .setWaitForAccurateLocation(true)
             .setMinUpdateIntervalMillis(500)
             .setMaxUpdates(1)
             .build()
-        
+
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { location ->
+                    sendLocationToWeb(location.latitude, location.longitude)
+                }
+                fusedLocationClient.removeLocationUpdates(this)
+                if (locationCallback == this) {
+                    locationCallback = null
+                }
+            }
+        }
+        locationCallback = callback
+
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
-            object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    result.lastLocation?.let { location ->
-                        sendLocationToWeb(location.latitude, location.longitude)
-                    }
-                    fusedLocationClient.removeLocationUpdates(this)
-                }
-            },
+            callback,
             Looper.getMainLooper()
         )
-        
+
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
             location?.let {
                 sendLocationToWeb(it.latitude, it.longitude)
@@ -167,9 +202,11 @@ class MainActivity : AppCompatActivity() {
     
     private fun sendLocationToWeb(lat: Double, lng: Double) {
         val js = "window.wiseWalkSetLocation && window.wiseWalkSetLocation($lat, $lng);"
-        binding.webView.post {
-            binding.webView.evaluateJavascript(js, null)
-        }
+        evaluateJs(js)
+    }
+
+    private fun evaluateJs(js: String) {
+        binding.webView.post { binding.webView.evaluateJavascript(js, null) }
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -183,7 +220,9 @@ class MainActivity : AppCompatActivity() {
                 .putString("sleep_time", o.optString("sleepTime", "23:00"))
                 .apply()
 
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to update profile from JS payload.", t)
+        }
     }
 
     private fun hasPermission(p: String): Boolean {
@@ -227,15 +266,14 @@ class MainActivity : AppCompatActivity() {
                     put("permissionLocation", hasPermission(Manifest.permission.ACCESS_FINE_LOCATION))
                 }
                 val js = "window.wiseWalkOnPermissionUpdate && window.wiseWalkOnPermissionUpdate($s);"
-                binding.webView.post { binding.webView.evaluateJavascript(js, null) }
-                
+                evaluateJs(js)
             }
             LOCATION_PERMISSION_REQUEST -> {
-                val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
                 pendingGeolocationCallback?.invoke(pendingGeolocationOrigin, granted, false)
                 pendingGeolocationCallback = null
                 pendingGeolocationOrigin = null
-                
+
                 if (granted) {
                     getCurrentLocation()
                 }
@@ -265,15 +303,19 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             startActivity(intent)
         } catch (e: Exception) {
+            Log.w(TAG, "Unable to open url with default ACTION_VIEW, trying browsable intent: $url", e)
             try {
                 val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 browserIntent.addCategory(Intent.CATEGORY_BROWSABLE)
                 startActivity(browserIntent)
-            } catch (_: Exception) {}
+            } catch (inner: Exception) {
+                Log.e(TAG, "Unable to open external url: $url", inner)
+            }
         }
     }
 
     companion object {
+        private const val TAG = "MainActivity"
         private const val PERMISSIONS_REQUEST = 2001
         private const val LOCATION_PERMISSION_REQUEST = 2002
     }
