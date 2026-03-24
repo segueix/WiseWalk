@@ -143,7 +143,7 @@ class MainActivity : AppCompatActivity() {
         binding.webView.removeJavascriptInterface("WiseWalkAndroid")
         binding.webView.stopLoading()
         binding.webView.webChromeClient = null
-        binding.webView.webViewClient = null
+        binding.webView.webViewClient = WebViewClient()
         binding.webView.destroy()
         super.onDestroy()
     }
