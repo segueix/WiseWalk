@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences("wisewalk_prefs", Context.MODE_PRIVATE) }
-    
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         val wv: WebView = binding.webView
@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
                 origin: String?,
@@ -115,9 +115,9 @@ class MainActivity : AppCompatActivity() {
                 if (wv.canGoBack()) wv.goBack() else finish()
             }
         })
-        
+
     }
-    
+
     override fun onResume() {
         super.onResume()
         val filter = IntentFilter(StepTrackingService.ACTION_STATS_UPDATE)
@@ -147,11 +147,11 @@ class MainActivity : AppCompatActivity() {
         binding.webView.destroy()
         super.onDestroy()
     }
-    
+
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     private fun requestLocationPermission() {
         ActivityCompat.requestPermissions(
             this,
@@ -199,7 +199,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    
+
     private fun sendLocationToWeb(lat: Double, lng: Double) {
         val js = "window.wiseWalkSetLocation && window.wiseWalkSetLocation($lat, $lng);"
         evaluateJs(js)
@@ -247,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)) {
             perms.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
-        
+
         if (perms.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, perms.toTypedArray(), PERMISSIONS_REQUEST)
         }
@@ -255,13 +255,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         when (requestCode) {
             PERMISSIONS_REQUEST -> {
                 val s = JSONObject().apply {
-                    put("permissionActivity", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) 
+                    put("permissionActivity", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                         hasPermission(Manifest.permission.ACTIVITY_RECOGNITION) else true)
-                    put("permissionNotif", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) 
+                    put("permissionNotif", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                         hasPermission(Manifest.permission.POST_NOTIFICATIONS) else true)
                     put("permissionLocation", hasPermission(Manifest.permission.ACCESS_FINE_LOCATION))
                 }
@@ -283,14 +283,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun startBackgroundTracking() {
         if (StepTrackingService.isRunning) return
-        
+
         val serviceIntent = Intent(this, StepTrackingService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
             startService(serviceIntent)
         }
-        
+
     }
 
     private fun stopBackgroundTracking() {
@@ -351,7 +351,7 @@ class MainActivity : AppCompatActivity() {
         fun openUrl(url: String) {
             activity.runOnUiThread { activity.openExternalUrl(url) }
         }
-        
+
         @JavascriptInterface
         fun getLocation() {
             activity.runOnUiThread { activity.getCurrentLocation() }
