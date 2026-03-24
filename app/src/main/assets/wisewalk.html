@@ -413,7 +413,7 @@
       const response=await fetch(url);
       if(!response.ok)throw new Error(`OSRM ${response.status}`);
       const data=await response.json();
-      if(data.code!=='Ok'||!data.routes?.length||!data.waypoints?.[1]?.location){
+      if(data.code!=='Ok'||!data.routes||!data.routes.length||!data.waypoints||!data.waypoints[1]||!data.waypoints[1].location){
         throw new Error('Resposta OSRM invàlida');
       }
       return data;
@@ -421,7 +421,7 @@
 
     function getKcalBySpeed(totalDistanceKm){
       const profile=loadProfile();
-      const userWeight=Math.max(30,Number(profile?.weightKg)||70);
+      const userWeight=Math.max(30,Number((profile || {}).weightKg)||70);
       const speedMetList=[
         {speed:4,met:3.0},
         {speed:5,met:3.5},
@@ -454,7 +454,7 @@
 
     function renderRouteMetrics(totalDistKm,totalDurationMin){
       const kcalBySpeed=renderRouteSpeedKcal(totalDistKm);
-      const kcalAtFive=kcalBySpeed.find(item=>item.speed===5)?.kcal||0;
+      const kcalAtFive=(kcalBySpeed.find(item=>item.speed===5)||{}).kcal||0;
       document.getElementById('route-distance').textContent=formatDecimal((Math.round(totalDistKm*10)/10).toFixed(1))+' km';
       document.getElementById('route-time').textContent='~'+Math.round(totalDurationMin)+' min';
       document.getElementById('route-kcal').textContent='~'+kcalAtFive+' kcal';
@@ -497,7 +497,7 @@
         const validRoutes=osrmResponses
           .filter(result=>result.status==='fulfilled')
           .map(result=>result.value)
-          .filter(data=>data.code==='Ok'&&data.routes?.[0]&&data.waypoints?.[1]?.location);
+          .filter(data=>data.code==='Ok'&&data.routes&&data.routes[0]&&data.waypoints&&data.waypoints[1]&&data.waypoints[1].location);
 
         if(!validRoutes.length){
           throw new Error('No hi ha rutes vàlides disponibles');
@@ -550,8 +550,8 @@
         weightLossKg:Math.min(20,Math.max(1,Number(document.getElementById(`weight-loss-${prefix}`).value)||2)),
         wakeTime:document.getElementById(`wake-${prefix}`).value,
         sleepTime:document.getElementById(`sleep-${prefix}`).value,
-        streakDays:loadProfile()?.streakDays||0,
-        streakDate:loadProfile()?.streakDate||null
+        streakDays:(loadProfile() || {}).streakDays || 0,
+        streakDate:(loadProfile() || {}).streakDate || null
       });
       updateConfigSummary();
       refreshDailyGoalUI();
@@ -561,7 +561,7 @@
       const stats=payload||{};
       currentStats={
         steps:Number(stats.steps)||0,
-        kcal:Number(stats.kcal ?? stats.kcalBurned ?? currentStats.kcal)||0,
+        kcal:Number(('kcal' in stats) ? stats.kcal : ('kcalBurned' in stats ? stats.kcalBurned : currentStats.kcal))||0,
         date:stats.date||getTodayKey()
       };
       refreshDailyGoalUI();
