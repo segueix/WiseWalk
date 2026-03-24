@@ -9,26 +9,235 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #F0F2F5;
-      --card: rgba(255, 255, 255, 0.86);
-      --text: #1B2333;
-      --muted: #6A748A;
-      --accent: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      --success: linear-gradient(135deg, #25c481 0%, #139d66 100%);
-      --radius-xl: 20px;
-      --shadow-soft: 0 18px 35px rgba(33, 45, 88, 0.10);
-      --shadow-press: 0 8px 18px rgba(54, 71, 133, 0.25);
-    }
+    :root{--bg:#f8f6f1;--bg-card:#fff;--text:#2d3a3a;--text-soft:#5a6b6b;--accent:#3d7a6b;--accent-light:#e8f2ef;--accent-warm:#d4a574;--border:#e0ddd5;--shadow:rgba(45,58,58,.08);--input-bg:#f8f6f1;--toggle-bg:#e0ddd5}
+    [data-theme="dark"]{--bg:#1a1d1d;--bg-card:#252a2a;--text:#e8e6e1;--text-soft:#9ca8a8;--accent:#5cb89f;--accent-light:#2a3d38;--accent-warm:#e4b584;--border:#3a4040;--shadow:rgba(0,0,0,.3);--input-bg:#1a1d1d;--toggle-bg:#3a4040}
+    [data-color="green"]{--accent:#3d7a6b;--accent-light:#e8f2ef}[data-color="green"][data-theme="dark"]{--accent:#5cb89f;--accent-light:#2a3d38}
+    [data-color="blue"]{--accent:#4a7a9b;--accent-light:#e3eef5}[data-color="blue"][data-theme="dark"]{--accent:#6ba3d9;--accent-light:#2a3545}
+    [data-color="purple"]{--accent:#7a5a8b;--accent-light:#f0e8f4}[data-color="purple"][data-theme="dark"]{--accent:#a87fc0;--accent-light:#3a2d42}
+    [data-color="coral"]{--accent:#c17a5a;--accent-light:#faf0eb}[data-color="coral"][data-theme="dark"]{--accent:#e09a7a;--accent-light:#3d2d28}
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{font-family:'Roboto Flex',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6;padding:1rem;transition:background .3s,color .3s}
+    .container{max-width:420px;margin:0 auto}
+    header{text-align:center;margin-bottom:1.5rem;position:relative}
+    .header-actions{position:absolute;top:0;right:0;display:flex;gap:.5rem}
+    .header-left{position:absolute;top:0;left:0}
+    .logo{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:.25rem}
+    .logo-icon{font-size:1.6rem}
+    h1{font-weight:700;font-size:1.75rem}
+    .subtitle{color:var(--text-soft);font-size:.9rem;font-weight:300}
+    .icon-btn{background:var(--toggle-bg);border:none;width:44px;height:44px;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.25rem;transition:all .3s}
+    .icon-btn:active,.btn:active{transform:scale(.98)}
+    .theme-toggle .icon-sun,.theme-toggle .icon-moon{position:absolute;transition:opacity .3s,transform .3s}
+    .theme-toggle .icon-moon{opacity:0;transform:rotate(-90deg)}
+    [data-theme="dark"] .theme-toggle .icon-sun{opacity:0;transform:rotate(90deg)}
+    [data-theme="dark"] .theme-toggle .icon-moon{opacity:1;transform:rotate(0)}
+    .card{background:var(--bg-card);border-radius:20px;padding:1.5rem;box-shadow:0 4px 24px var(--shadow);margin-bottom:1rem;transition:background .3s}
+    .screen{display:none}.screen.active{display:block}
+    .form-group{margin-bottom:1.25rem}
+    label{display:block;font-weight:500;margin-bottom:.5rem;font-size:.9rem}
+    .input-wrapper{position:relative}
+    input[type="number"],input[type="time"]{width:100%;padding:1rem 3.5rem 1rem 1.2rem;border:2px solid var(--border);border-radius:14px;font-size:1.05rem;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text);-webkit-appearance:none;-moz-appearance:textfield}
+    input[type="time"]{padding-right:1.2rem}
+    input:focus{outline:none;border-color:var(--accent);background:var(--bg-card)}
+    .unit{position:absolute;right:1.2rem;top:50%;transform:translateY(-50%);color:var(--text-soft);font-size:.9rem;pointer-events:none}
+    .time-inputs,.sex-selector{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+    .sex-option{position:relative}.sex-option input{position:absolute;opacity:0}
+    .sex-option label{display:flex;flex-direction:column;align-items:center;padding:.85rem .5rem;background:var(--input-bg);border:2px solid var(--border);border-radius:14px;cursor:pointer;transition:all .2s;margin:0}
+    .sex-option input:checked+label{border-color:var(--accent);background:var(--accent-light)}
+    .sex-icon{font-size:1.5rem;margin-bottom:.15rem}.sex-label{font-size:.8rem;color:var(--text-soft)}
+    .sex-option input:checked+label .sex-label{color:var(--accent);font-weight:500}
+    .btn{width:100%;padding:1rem;background:var(--accent);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:600;font-family:'Roboto Flex',sans-serif;cursor:pointer;transition:all .2s;margin-top:1rem;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .btn-secondary{background:var(--toggle-bg);color:var(--text)}
+    .btn-small{padding:.75rem;font-size:.95rem;margin-top:.75rem}
+    .result-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;padding-bottom:.85rem;border-bottom:1px solid var(--border)}
+    .result-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;background:var(--accent-light)}
+    .result-title{font-weight:700;font-size:1.15rem}.result-subtitle{font-size:.8rem;color:var(--text-soft)}
+    .summary-box{background:var(--accent-light);border-radius:12px;padding:1rem;margin-bottom:1rem}
+    .summary-row{display:flex;justify-content:space-between;padding:.25rem 0;font-size:.9rem}
+    .summary-row span:first-child{color:var(--text-soft)}.summary-row span:last-child{font-weight:600}
+    .color-selector{display:flex;justify-content:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--input-bg);border-radius:14px}
+    .color-option{width:48px;height:48px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .2s;position:relative}
+    .color-option:hover{transform:scale(1.08)}.color-option.active{border-color:var(--text);box-shadow:0 0 0 3px var(--bg-card)}
+    .color-option.active::after{content:'✓';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+    .color-green{background:linear-gradient(135deg,#3d7a6b,#5cb89f)}.color-blue{background:linear-gradient(135deg,#4a7a9b,#6ba3d9)}.color-purple{background:linear-gradient(135deg,#7a5a8b,#a87fc0)}.color-coral{background:linear-gradient(135deg,#c17a5a,#e09a7a)}
+    .route-container{margin-top:.75rem;padding:1rem;background:var(--input-bg);border-radius:14px}
+    .daily-goal-card{background:var(--bg-card);border-radius:16px;padding:1.5rem;text-align:center;box-shadow:0 4px 20px var(--shadow);margin-bottom:1rem}
+    .daily-goal-title{font-size:1.1rem;font-weight:700}
+    .streak-badge{display:inline-block;background:var(--accent-light);color:var(--accent);padding:.4rem .8rem;border-radius:20px;font-weight:700;font-size:.9rem;margin-bottom:.5rem}
+    .progress-container{width:100%;background:var(--accent-light);border-radius:20px;height:24px;margin:1rem 0;overflow:hidden;position:relative}
+    .progress-bar{height:100%;background:linear-gradient(90deg,var(--accent-warm),var(--accent));width:0%;transition:width .5s ease-out}
+    .progress-text{position:absolute;width:100%;top:50%;left:0;transform:translateY(-50%);font-size:.85rem;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+    .goal-caption{font-size:.8rem;color:var(--text-soft)}
+    .goal-inline{font-weight:700;color:var(--accent)}
+    .hidden{display:none!important}
+    .route-info-text{font-size:.9rem;color:var(--text-soft);text-align:center;padding:.5rem}
+    .route-details{display:flex;justify-content:space-around;padding:.75rem;background:var(--accent-light);border-radius:10px;margin:.75rem 0}
+    .route-detail{text-align:center}.route-detail-value{font-weight:700;color:var(--accent);font-size:1.1rem}.route-detail-label{font-size:.7rem;color:var(--text-soft)}
+    .route-kcal-speeds{margin-top:.75rem;padding:.75rem;background:var(--accent-light);border-radius:10px;display:none}
+    .route-kcal-title{font-size:.8rem;color:var(--text-soft);margin-bottom:.5rem;text-align:center}
+    .route-kcal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+    .route-kcal-item{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;text-align:center}
+    .route-kcal-speed{font-size:.8rem;color:var(--text-soft)}
+    .route-kcal-value{font-weight:700;color:var(--accent)}
+    footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <button class="icon-btn theme-toggle" id="themeToggle"><span class="icon-sun">☀️</span><span class="icon-moon">🌙</span></button>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btnConfig">⚙️</button>
+      </div>
+      <div class="logo"><span class="logo-icon">🚶</span><h1>WiseWalk</h1></div>
+      <p class="subtitle">Explora una ruta aleatòria per caminar.</p>
+    </header>
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    <div id="screen-setup" class="screen">
+      <div class="card">
+        <div style="text-align:center;padding:1rem 0"><h2>👋 Benvingut!</h2><p class="subtitle">Introdueix les teves dades</p></div>
+        <form id="form-setup">
+          <div class="form-group">
+            <label>Sexe</label>
+            <div class="sex-selector">
+              <div class="sex-option"><input type="radio" name="sex-setup" id="sex-m-setup" value="M" checked><label for="sex-m-setup"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div>
+              <div class="sex-option"><input type="radio" name="sex-setup" id="sex-f-setup" value="F"><label for="sex-f-setup"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div>
+            </div>
+          </div>
+          <div class="form-group"><label for="age-setup">Edat</label><div class="input-wrapper"><input type="number" id="age-setup" inputmode="numeric" min="5" max="120" value="35" required><span class="unit">anys</span></div></div>
+          <div class="form-group"><label for="height-setup">Alçada</label><div class="input-wrapper"><input type="number" id="height-setup" inputmode="numeric" min="100" max="250" value="170" required><span class="unit">cm</span></div></div>
+          <div class="form-group"><label for="weight-setup">Pes</label><div class="input-wrapper"><input type="number" id="weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="70" required><span class="unit">kg</span></div></div>
+          <div class="form-group">
+            <label for="goal-setup">Objectiu principal</label>
+            <div class="input-wrapper">
+              <select id="goal-setup" style="width:100%;padding:1rem 1.2rem;border:2px solid var(--border);border-radius:14px;font-size:1rem;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text);" required>
+                <option value="stay_active">Mantenir-me actiu</option>
+                <option value="lose_weight">Perdre pes</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group hidden" id="setup-weight-loss-group">
+            <label for="weight-loss-setup">Quants quilos vols perdre?</label>
+            <div class="input-wrapper"><input type="number" id="weight-loss-setup" inputmode="numeric" min="1" max="20" value="2" required><span class="unit">kg</span></div>
+          </div>
+          <div class="form-group">
+            <label>Horari de son</label>
+            <div class="time-inputs">
+              <div><label for="wake-setup" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-setup" value="07:00" required></div>
+              <div><label for="sleep-setup" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-setup" value="23:00" required></div>
+            </div>
+          </div>
+          <button type="submit" class="btn">Continuar</button>
+        </form>
+      </div>
+    </div>
 
-    body {
-      min-height: 100vh;
-      background: radial-gradient(circle at top right, #f9fbff, #eef2ff 30%, var(--bg) 60%);
-      font-family: 'Poppins', sans-serif;
-      color: var(--text);
-      padding: 16px;
+    <div id="screen-main" class="screen">
+      <section class="daily-goal-card">
+        <div class="streak-badge" id="streak-counter">🔥 0 dies seguits</div>
+        <h3 class="daily-goal-title">Objectiu d'avui</h3>
+        <div class="progress-container">
+          <div class="progress-bar" id="kcal-progress-bar"></div>
+          <div class="progress-text" id="kcal-progress-text">0 / 150 kcal</div>
+        </div>
+        <p class="goal-caption">Objectiu diari: <span class="goal-inline" id="daily-goal-value">150 kcal</span></p>
+        <p id="motivational-message" style="font-size:.9rem;color:var(--text-soft);margin-top:.5rem;">Llest per la teva primera caminada d'avui?</p>
+      </section>
+      <section class="card" id="card-route">
+        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km</div></div></div>
+        <div class="route-container">
+          <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
+          <div class="route-details" id="route-details" style="display:none">
+            <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
+            <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps estimat</div></div>
+            <div class="route-detail"><div class="route-detail-value" id="route-kcal">— kcal</div><div class="route-detail-label">kcal estimades</div></div>
+          </div>
+          <div class="route-kcal-speeds" id="route-kcal-speeds"></div>
+          <button class="btn btn-small" id="btn-generate-route">🎲 Generar ruta</button>
+          <button class="btn btn-secondary btn-small" id="btn-open-maps" style="display:none">📍 Obrir a Google Maps</button>
+        </div>
+      </section>
+      <footer>WiseWalk © 2024</footer>
+    </div>
+
+    <div id="screen-config" class="screen">
+      <section class="card">
+        <div class="result-header"><div class="result-icon">⚙️</div><div><div class="result-title">Configuració</div><div class="result-subtitle">Modifica les teves dades</div></div></div>
+        <div class="form-group">
+          <label style="text-align:center">🎨 Color de l'aplicació</label>
+          <div class="color-selector" id="color-selector">
+            <div class="color-option color-green" data-color="green" title="Verd"></div>
+            <div class="color-option color-blue" data-color="blue" title="Blau"></div>
+            <div class="color-option color-purple" data-color="purple" title="Lila"></div>
+            <div class="color-option color-coral" data-color="coral" title="Coral"></div>
+          </div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-row"><span>Perfil desat</span><span id="cfg-profile-status">—</span></div>
+          <div class="summary-row"><span>Horari</span><span id="cfg-schedule">—</span></div>
+        </div>
+        <form id="form-config">
+          <div class="form-group"><label>Sexe</label><div class="sex-selector"><div class="sex-option"><input type="radio" name="sex-config" id="sex-m-config" value="M" checked><label for="sex-m-config"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div><div class="sex-option"><input type="radio" name="sex-config" id="sex-f-config" value="F"><label for="sex-f-config"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div></div></div>
+          <div class="form-group"><label for="age-config">Edat</label><div class="input-wrapper"><input type="number" id="age-config" inputmode="numeric" min="5" max="120" required><span class="unit">anys</span></div></div>
+          <div class="form-group"><label for="height-config">Alçada</label><div class="input-wrapper"><input type="number" id="height-config" inputmode="numeric" min="100" max="250" required><span class="unit">cm</span></div></div>
+          <div class="form-group"><label for="weight-config">Pes</label><div class="input-wrapper"><input type="number" id="weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
+          <div class="form-group">
+            <label for="goal-config">Objectiu principal</label>
+            <div class="input-wrapper">
+              <select id="goal-config" style="width:100%;padding:1rem 1.2rem;border:2px solid var(--border);border-radius:14px;font-size:1rem;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text);" required>
+                <option value="stay_active">Mantenir-me actiu</option>
+                <option value="lose_weight">Perdre pes</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group hidden" id="config-weight-loss-group">
+            <label for="weight-loss-config">Quants quilos vols perdre?</label>
+            <div class="input-wrapper"><input type="number" id="weight-loss-config" inputmode="numeric" min="1" max="20" value="2" required><span class="unit">kg</span></div>
+          </div>
+          <div class="form-group">
+            <label>Horari de son</label>
+            <div class="time-inputs">
+              <div><label for="wake-config" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-config" required></div>
+              <div><label for="sleep-config" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-config" required></div>
+            </div>
+          </div>
+          <button type="submit" class="btn">Desar canvis</button>
+        </form>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const screenSetup=document.getElementById('screen-setup');
+    const screenMain=document.getElementById('screen-main');
+    const screenConfig=document.getElementById('screen-config');
+    const formSetup=document.getElementById('form-setup');
+    const formConfig=document.getElementById('form-config');
+    const btnConfig=document.getElementById('btnConfig');
+    const btnBack=document.getElementById('btn-back');
+    const themeToggle=document.getElementById('themeToggle');
+    const routeInfo=document.getElementById('route-info');
+    const routeDetails=document.getElementById('route-details');
+    const routeKcalSpeeds=document.getElementById('route-kcal-speeds');
+    const btnGenerateRoute=document.getElementById('btn-generate-route');
+    const btnOpenMaps=document.getElementById('btn-open-maps');
+    const html=document.documentElement;
+    const metaTheme=document.querySelector('meta[name="theme-color"]');
+    let userLocation=null;
+    let currentRoute=null;
+    let currentStats={steps:0,kcal:0,date:null};
+
+    const formatDecimal=n=>n.toString().replace('.',',');
+    const loadProfile=()=>{try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}};
+    const saveProfile=p=>localStorage.setItem('wisewalk-profile',JSON.stringify(p));
+
+    function setTheme(theme){
+      html.setAttribute('data-theme',theme);
+      localStorage.setItem('wisewalk-theme',theme);
+      metaTheme.setAttribute('content',theme==='dark'?'#1a1d1d':'#f8f6f1');
     }
 
     .app { max-width: 460px; margin: 0 auto; }
@@ -380,37 +589,65 @@
       return data;
     };
 
-    const clearRouteState = (message = 'Ruta netejada. Pots generar-ne una de nova.') => {
-      currentRoute = null;
-      routeInfo.textContent = message;
-      routeStats.classList.add('hidden');
-      btnOpenMaps.classList.add('hidden');
-      btnClaim.classList.add('hidden');
-      btnClaim.disabled = true;
-      distanceDestination.textContent = '-';
-    };
+    function getKcalBySpeed(totalDistanceKm){
+      const profile=loadProfile();
+      const userWeight=Math.max(30,Number(profile?.weightKg)||70);
+      const speedMetList=[
+        {speed:4,met:3.0},
+        {speed:5,met:3.5},
+        {speed:6,met:4.3},
+        {speed:7,met:5.3}
+      ];
+      return speedMetList.map(item=>{
+        const timeHours=totalDistanceKm/item.speed;
+        const kcal=Math.round(item.met*userWeight*timeHours);
+        return {...item,kcal};
+      });
+    }
 
-    const renderRouteStats = (route) => {
-      routeStats.classList.remove('hidden');
-      document.getElementById('stat-distance').textContent = `${route.totalKm.toFixed(2)} km`;
-      document.getElementById('stat-time').textContent = `~${Math.round(route.totalMinutes)} min`;
-      document.getElementById('stat-kcal').textContent = `~${Math.round(route.estimatedKcal)} kcal`;
-      distanceDestination.textContent = 'Esperant GPS...';
-      btnOpenMaps.classList.remove('hidden');
-      btnClaim.classList.add('hidden');
-      btnClaim.disabled = true;
-    };
+    function renderRouteSpeedKcal(totalDistanceKm){
+      const kcalItems=getKcalBySpeed(totalDistanceKm);
+      routeKcalSpeeds.innerHTML=`
+        <div class="route-kcal-title">Kcal totals (anada + tornada) segons ritme</div>
+        <div class="route-kcal-grid">
+          ${kcalItems.map(item=>`
+            <div class="route-kcal-item">
+              <div class="route-kcal-speed">${item.speed} km/h</div>
+              <div class="route-kcal-value">~${item.kcal} kcal</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      routeKcalSpeeds.style.display='block';
+      return kcalItems;
+    }
 
-    const computeDynamicTargetKm = () => {
-      const goal = getGoalKcal();
-      const remaining = getRemainingKcal();
-      const profile = loadProfile();
-      const weight = Number(profile?.weightKg || 70);
+    function renderRouteMetrics(totalDistKm,totalDurationMin){
+      const kcalBySpeed=renderRouteSpeedKcal(totalDistKm);
+      const kcalAtFive=kcalBySpeed.find(item=>item.speed===5)?.kcal||0;
+      document.getElementById('route-distance').textContent=formatDecimal((Math.round(totalDistKm*10)/10).toFixed(1))+' km';
+      document.getElementById('route-time').textContent='~'+Math.round(totalDurationMin)+' min';
+      document.getElementById('route-kcal').textContent='~'+kcalAtFive+' kcal';
+      routeDetails.style.display='flex';
+      btnOpenMaps.style.display='block';
+    }
 
-      if (remaining >= goal) return 3;
-      const kmLeftToBurn = remaining / (Math.max(30, weight) * DEFAULT_MET);
-      return Math.max(0.4, kmLeftToBurn);
-    };
+    function generateFallbackRoute(targetDistanceKm=1.5){
+      const angle=Math.random()*2*Math.PI;
+      const d=targetDistanceKm/111;
+      const offset=(Math.random()-0.5)*0.0015;
+      const perpAngle=angle+Math.PI/2;
+      const dest={
+        lat:userLocation.lat+Math.cos(angle)*d+Math.cos(perpAngle)*offset,
+        lng:userLocation.lng+Math.sin(angle)*d/Math.cos(userLocation.lat*Math.PI/180)+Math.sin(perpAngle)*offset
+      };
+      const oneWayDist=haversineDistance(userLocation.lat,userLocation.lng,dest.lat,dest.lng);
+      const totalDist=oneWayDist*2;
+      const totalDurationMin=totalDist/5*60;
+      currentRoute={start:{...userLocation},end:dest};
+      renderRouteMetrics(totalDist,totalDurationMin);
+      routeInfo.textContent='Ruta aproximada generada (mode offline).';
+    }
 
     const generateRoute = async () => {
       if (!currentLocation) {
@@ -418,12 +655,14 @@
         return;
       }
 
-      const targetTotalKm = computeDynamicTargetKm();
-      const oneWayKm = targetTotalKm / 2;
-      const targetMeters = oneWayKm * 1000;
+      routeInfo.textContent='Calculant rutes reals...';
+      btnGenerateRoute.disabled=true;
 
-      routeInfo.textContent = `Generant ruta real: anada ${oneWayKm.toFixed(2)} km...`;
-      btnGenerateRoute.disabled = true;
+      try{
+        const candidates=buildCandidatePoints(targetDistanceKm);
+        const osrmResponses=await Promise.allSettled(
+          candidates.map(candidate=>fetchOsrmRoute(userLocation,candidate))
+        );
 
       try {
         const candidates = buildCandidatePoints(currentLocation, oneWayKm);
@@ -435,10 +674,11 @@
 
         if (!valid.length) throw new Error('No valid routes');
 
-        const best = valid.reduce((acc, cur) => {
-          const a = Math.abs(acc.routes[0].distance - targetMeters);
-          const c = Math.abs(cur.routes[0].distance - targetMeters);
-          return c < a ? cur : acc;
+        const targetMeters=targetDistanceKm*1000;
+        const best=validRoutes.reduce((closest,current)=>{
+          const currentDiff=Math.abs(current.routes[0].distance-targetMeters);
+          const closestDiff=Math.abs(closest.routes[0].distance-targetMeters);
+          return currentDiff<closestDiff?current:closest;
         });
 
         const snapped = best.waypoints[1].location;
