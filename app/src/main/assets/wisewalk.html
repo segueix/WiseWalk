@@ -370,19 +370,34 @@
       });
     }
 
+    const TARGET_TOTAL_DISTANCE_KM=3.0;
+    const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
+    const DISTANCE_TOLERANCE_KM=0.2;
+
     async function fetchRouteWithOrs(start,end){
       const apiKey=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
       if(!apiKey){
         throw new Error('Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).');
       }
+      const requestBody={
+        coordinates:[
+          [start.lng,start.lat],
+          [end.lng,end.lat]
+        ],
+        elevation:true,
+        options:{
+          avoid_features:['steps','ferries','fords']
+        }
+      };
       const params=new URLSearchParams({
         api_key:apiKey,
-        start:`${start.lng},${start.lat}`,
-        end:`${end.lng},${end.lat}`,
-        format:'geojson',
-        elevation:'true'
+        format:'geojson'
       });
-      const response=await fetch(`https://api.openrouteservice.org/v2/directions/foot-walking?${params.toString()}`);
+      const response=await fetch(`https://api.openrouteservice.org/v2/directions/foot-walking/geojson?${params.toString()}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(requestBody)
+      });
       if(!response.ok){
         const errorBody=await response.text();
         throw new Error(formatOrsError(response.status,errorBody));
@@ -418,7 +433,7 @@
     }
 
     async function generateRouteFromLocation(start){
-      let targetDistanceMeters=800;
+      let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
       let chosenData=null;
       let chosenDestination=null;
 
@@ -439,19 +454,24 @@
         if(!summary||typeof summary.distance!=='number')continue;
 
         const totalDistanceKm=(summary.distance*2)/1000;
-        if(totalDistanceKm>=1.5&&totalDistanceKm<=1.7){
+        if(Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM)<=DISTANCE_TOLERANCE_KM){
+          const geometry=data.features[0].geometry;
+          const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
+            ?geometry.coordinates[geometry.coordinates.length-1]
+            :null;
+          if(!snappedEndCoords||snappedEndCoords.length<2)continue;
           chosenData=data;
-          chosenDestination=destination;
+          chosenDestination={lat:snappedEndCoords[1],lng:snappedEndCoords[0]};
           break;
         }
 
-        targetDistanceMeters+=(1.6-totalDistanceKm)*140;
-        if(targetDistanceMeters<650)targetDistanceMeters=650;
-        if(targetDistanceMeters>950)targetDistanceMeters=950;
+        targetDistanceMeters+=((TARGET_TOTAL_DISTANCE_KM-totalDistanceKm)/2)*140;
+        if(targetDistanceMeters<1200)targetDistanceMeters=1200;
+        if(targetDistanceMeters>1800)targetDistanceMeters=1800;
       }
 
       if(!chosenData||!chosenDestination){
-        throw new Error('No s\'ha pogut generar una ruta dins del rang desitjat');
+        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat');
       }
       return {data:chosenData,destination:chosenDestination};
     }
@@ -511,7 +531,7 @@
 
         routeDetails.style.display='flex';
         btnOpenMaps.style.display='block';
-        routeInfo.textContent='Ruta generada amb distància real i desnivell ORS.';
+        routeInfo.textContent='Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.';
       }catch(err){
         routeInfo.textContent=err.message||'Error en generar la ruta.';
       }finally{
