@@ -151,7 +151,7 @@
         </div>
       </section>
       <section class="card" id="card-route">
-        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km</div></div></div>
+        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 2,0 km (4,0 km totals)</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
@@ -162,6 +162,10 @@
           <div id="calorie-table" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;margin-top:.5rem"></div>
           <button class="btn btn-small" id="btn-generate-route">🎲 Generar ruta</button>
           <button class="btn btn-secondary btn-small" id="btn-open-maps" style="display:none">📍 Obrir a Google Maps</button>
+          <button class="btn btn-small" id="btn-start-walk" style="display:none">▶️ Iniciar</button>
+          <button class="btn btn-small" id="btn-claim-outbound" style="display:none">🎁 Reclamar anada</button>
+          <button class="btn btn-secondary btn-small" id="btn-return-origin" style="display:none">↩️ Tornar a punt d'origen</button>
+          <button class="btn btn-small" id="btn-claim-return" style="display:none">🎁 Reclamar tornada</button>
         </div>
       </section>
       <footer>WiseWalk © 2024</footer>
@@ -226,13 +230,21 @@
     const routeDetails=document.getElementById('route-details');
     const btnGenerateRoute=document.getElementById('btn-generate-route');
     const btnOpenMaps=document.getElementById('btn-open-maps');
+    const btnStartWalk=document.getElementById('btn-start-walk');
+    const btnClaimOutbound=document.getElementById('btn-claim-outbound');
+    const btnReturnOrigin=document.getElementById('btn-return-origin');
+    const btnClaimReturn=document.getElementById('btn-claim-return');
     const html=document.documentElement;
     const metaTheme=document.querySelector('meta[name="theme-color"]');
     let userLocation=null;
     let currentRoute=null;
     let previousDestination=null;
     let currentRouteMetrics=null;
-    const WALK_SPEEDS_KMH=[4.0,4.5,5.0,5.5,6.0];
+    let walkSession=null;
+    let walkWatchId=null;
+    let walkTimerId=null;
+    const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
+    const ARRIVAL_THRESHOLD_M=35;
 
     const formatDecimal=n=>n.toString().replace('.',',');
     const loadProfile=()=>{try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}};
@@ -370,19 +382,192 @@
       });
     }
 
+    function saveWalkSession(){
+      if(walkSession)localStorage.setItem('wisewalk-walk-session',JSON.stringify(walkSession));
+      else localStorage.removeItem('wisewalk-walk-session');
+    }
+
+    function setWalkButtonsVisibility({start=false,claimOutbound=false,returnOrigin=false,claimReturn=false}={}){
+      btnStartWalk.style.display=start?'block':'none';
+      btnClaimOutbound.style.display=claimOutbound?'block':'none';
+      btnReturnOrigin.style.display=returnOrigin?'block':'none';
+      btnClaimReturn.style.display=claimReturn?'block':'none';
+    }
+
+    function getTodayIsoDate(){
+      return new Date().toISOString().split('T')[0];
+    }
+
+    function addBurnedCaloriesToToday(kcal){
+      const history=JSON.parse(localStorage.getItem('wisewalk-kcal-history')||'{}');
+      const today=getTodayIsoDate();
+      history[today]=(history[today]||0)+Math.round(kcal);
+      localStorage.setItem('wisewalk-kcal-history',JSON.stringify(history));
+      updateCalorieGoals();
+    }
+
+    function getLegData(leg){
+      if(!currentRouteMetrics)return null;
+      return {
+        distanceKm:currentRouteMetrics.distanceKm/2,
+        elevationM:currentRouteMetrics.elevationM/2,
+        legName:leg==='outbound'?'anada':'tornada'
+      };
+    }
+
+    function getLegKcalFromElapsed(leg,elapsedSeconds){
+      const legData=getLegData(leg);
+      if(!legData||elapsedSeconds<=0)return 0;
+      const elapsedMinutes=elapsedSeconds/60;
+      const speedKmh=Math.max(2.5,Math.min(7.0,legData.distanceKm/(elapsedMinutes/60)));
+      return calculateRouteCalories(getCalorieProfile(),legData.distanceKm,legData.elevationM,speedKmh).kcal;
+    }
+
+    function getDistanceToTargetMeters(target){
+      if(!userLocation||!target)return Number.POSITIVE_INFINITY;
+      return haversineDistance(userLocation.lat,userLocation.lng,target.lat,target.lng);
+    }
+
+    function stopWalkTimer(){
+      if(walkTimerId){
+        clearInterval(walkTimerId);
+        walkTimerId=null;
+      }
+    }
+
+    function stopWalkWatcher(){
+      if(walkWatchId!=null&&'geolocation' in navigator){
+        navigator.geolocation.clearWatch(walkWatchId);
+        walkWatchId=null;
+      }
+    }
+
+    function renderActiveWalkStatus(){
+      if(!walkSession||!walkSession.activeLeg||!walkSession.startedAt)return;
+      const elapsedSeconds=Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
+      const min=Math.floor(elapsedSeconds/60);
+      const sec=(elapsedSeconds%60).toString().padStart(2,'0');
+      const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
+      const remaining=Math.round(getDistanceToTargetMeters(target));
+      const phase=walkSession.activeLeg==='outbound'?'anada':'tornada';
+      routeInfo.textContent=`Temps ${phase}: ${min}:${sec} · Distància al punt: ${remaining} m`;
+    }
+
+    function startWalkTimer(){
+      stopWalkTimer();
+      renderActiveWalkStatus();
+      walkTimerId=setInterval(renderActiveWalkStatus,1000);
+    }
+
+    function completeCurrentLegByArrival(){
+      if(!walkSession||!walkSession.activeLeg)return;
+      const leg=walkSession.activeLeg;
+      const endedAt=Date.now();
+      const elapsedSeconds=Math.max(0,Math.floor((endedAt-walkSession.startedAt)/1000));
+      if(leg==='outbound'){
+        walkSession.outboundElapsedSeconds=elapsedSeconds;
+        walkSession.activeLeg=null;
+        walkSession.startedAt=null;
+        stopWalkTimer();
+        stopWalkWatcher();
+        saveWalkSession();
+        setWalkButtonsVisibility({claimOutbound:true});
+        routeInfo.textContent='Has arribat al destí! Prem "Reclamar anada".';
+      }else if(leg==='return'){
+        walkSession.returnElapsedSeconds=elapsedSeconds;
+        walkSession.activeLeg=null;
+        walkSession.startedAt=null;
+        stopWalkTimer();
+        stopWalkWatcher();
+        saveWalkSession();
+        setWalkButtonsVisibility({claimReturn:true});
+        routeInfo.textContent='Has arribat al punt d\'origen! Prem "Reclamar tornada".';
+      }
+    }
+
+    function ensureWalkWatcher(){
+      if(!walkSession||!walkSession.activeLeg)return;
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
+        startWalkTimer();
+        return;
+      }
+      if(!('geolocation' in navigator)){
+        routeInfo.textContent='Geolocalització no disponible per controlar l\'arribada.';
+        return;
+      }
+      if(walkWatchId!=null)return;
+      walkWatchId=navigator.geolocation.watchPosition(
+        pos=>{
+          setRouteUserLocation(pos.coords.latitude,pos.coords.longitude);
+          const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
+          if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
+            completeCurrentLegByArrival();
+          }
+        },
+        ()=>{},
+        {enableHighAccuracy:true,timeout:15000,maximumAge:1500}
+      );
+      startWalkTimer();
+    }
+
+    function restoreWalkUi(){
+      if(!walkSession){
+        setWalkButtonsVisibility({start:!!currentRoute});
+        return;
+      }
+      if(walkSession.activeLeg==='outbound'){
+        setWalkButtonsVisibility({});
+        ensureWalkWatcher();
+        return;
+      }
+      if(walkSession.outboundElapsedSeconds!=null&&walkSession.outboundClaimed!==true&&walkSession.returnElapsedSeconds==null){
+        setWalkButtonsVisibility({claimOutbound:true});
+        return;
+      }
+      if(walkSession.outboundClaimed===true&&walkSession.activeLeg!=='return'&&walkSession.returnElapsedSeconds==null){
+        setWalkButtonsVisibility({returnOrigin:true});
+        return;
+      }
+      if(walkSession.activeLeg==='return'){
+        setWalkButtonsVisibility({});
+        ensureWalkWatcher();
+        return;
+      }
+      if(walkSession.returnElapsedSeconds!=null&&walkSession.returnClaimed!==true){
+        setWalkButtonsVisibility({claimReturn:true});
+        return;
+      }
+      setWalkButtonsVisibility({start:!!currentRoute});
+    }
+
+    const TARGET_TOTAL_DISTANCE_KM=4.0;
+    const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
+    const DISTANCE_TOLERANCE_KM=0.2;
+
     async function fetchRouteWithOrs(start,end){
       const apiKey=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
       if(!apiKey){
         throw new Error('Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).');
       }
+      const requestBody={
+        coordinates:[
+          [start.lng,start.lat],
+          [end.lng,end.lat]
+        ],
+        elevation:true,
+        options:{
+          avoid_features:['steps','ferries','fords']
+        }
+      };
       const params=new URLSearchParams({
         api_key:apiKey,
-        start:`${start.lng},${start.lat}`,
-        end:`${end.lng},${end.lat}`,
-        format:'geojson',
-        elevation:'true'
+        format:'geojson'
       });
-      const response=await fetch(`https://api.openrouteservice.org/v2/directions/foot-walking?${params.toString()}`);
+      const response=await fetch(`https://api.openrouteservice.org/v2/directions/foot-walking/geojson?${params.toString()}`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(requestBody)
+      });
       if(!response.ok){
         const errorBody=await response.text();
         throw new Error(formatOrsError(response.status,errorBody));
@@ -418,7 +603,7 @@
     }
 
     async function generateRouteFromLocation(start){
-      let targetDistanceMeters=800;
+      let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
       let chosenData=null;
       let chosenDestination=null;
 
@@ -439,25 +624,39 @@
         if(!summary||typeof summary.distance!=='number')continue;
 
         const totalDistanceKm=(summary.distance*2)/1000;
-        if(totalDistanceKm>=1.5&&totalDistanceKm<=1.7){
+        if(Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM)<=DISTANCE_TOLERANCE_KM){
+          const geometry=data.features[0].geometry;
+          const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
+            ?geometry.coordinates[geometry.coordinates.length-1]
+            :null;
+          if(!snappedEndCoords||snappedEndCoords.length<2)continue;
           chosenData=data;
-          chosenDestination=destination;
+          chosenDestination={lat:snappedEndCoords[1],lng:snappedEndCoords[0]};
           break;
         }
 
-        targetDistanceMeters+=(1.6-totalDistanceKm)*140;
-        if(targetDistanceMeters<650)targetDistanceMeters=650;
-        if(targetDistanceMeters>950)targetDistanceMeters=950;
+        targetDistanceMeters+=((TARGET_TOTAL_DISTANCE_KM-totalDistanceKm)/2)*140;
+        if(targetDistanceMeters<1200)targetDistanceMeters=1200;
+        if(targetDistanceMeters>1800)targetDistanceMeters=1800;
       }
 
       if(!chosenData||!chosenDestination){
-        throw new Error('No s\'ha pogut generar una ruta dins del rang desitjat');
+        throw new Error('No s\'ha pogut generar una ruta de 4 km dins del rang desitjat');
       }
       return {data:chosenData,destination:chosenDestination};
     }
 
     function setRouteUserLocation(lat,lng){
       userLocation={lat,lng};
+      if(walkSession&&walkSession.activeLeg){
+        const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
+        if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
+          completeCurrentLegByArrival();
+          return;
+        }
+        renderActiveWalkStatus();
+        return;
+      }
       routeInfo.textContent='Ubicació obtinguda! Genera una ruta.';
     }
 
@@ -503,6 +702,9 @@
         currentRoute={start:userLocation,end:routeResult.destination};
         previousDestination=routeResult.destination;
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
+        walkSession=null;
+        saveWalkSession();
+        localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
 
         document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
         document.getElementById('route-elevation').textContent=`+${Math.round(totalPositiveGainM)} m`;
@@ -511,7 +713,8 @@
 
         routeDetails.style.display='flex';
         btnOpenMaps.style.display='block';
-        routeInfo.textContent='Ruta generada amb distància real i desnivell ORS.';
+        setWalkButtonsVisibility({start:true});
+        routeInfo.textContent='Ruta generada (4 km aprox.) amb arribada en camí/carrer accessible.';
       }catch(err){
         routeInfo.textContent=err.message||'Error en generar la ruta.';
       }finally{
@@ -524,6 +727,63 @@
       const url='https://www.google.com/maps/dir/?api=1&origin='+currentRoute.start.lat+','+currentRoute.start.lng+'&destination='+currentRoute.end.lat+','+currentRoute.end.lng+'&travelmode=walking';
       if(window.WiseWalkAndroid&&WiseWalkAndroid.openUrl)WiseWalkAndroid.openUrl(url);
       else window.open(url,'_blank');
+    }
+
+    function startOutboundWalk(){
+      if(!currentRoute||!currentRoute.start||!currentRoute.end){
+        routeInfo.textContent='Primer genera una ruta.';
+        return;
+      }
+      walkSession={
+        origin:{lat:currentRoute.start.lat,lng:currentRoute.start.lng},
+        destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
+        activeLeg:'outbound',
+        startedAt:Date.now(),
+        outboundElapsedSeconds:null,
+        returnElapsedSeconds:null,
+        outboundClaimed:false,
+        returnClaimed:false
+      };
+      saveWalkSession();
+      localStorage.setItem('wisewalk-last-origin',JSON.stringify(walkSession.origin));
+      setWalkButtonsVisibility({});
+      ensureWalkWatcher();
+    }
+
+    function claimOutboundReward(){
+      if(!walkSession||walkSession.outboundElapsedSeconds==null)return;
+      const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
+      addBurnedCaloriesToToday(burnedKcal);
+      walkSession.outboundClaimed=true;
+      saveWalkSession();
+      setWalkButtonsVisibility({returnOrigin:true});
+      routeInfo.textContent=`Anada reclamada: ${burnedKcal} kcal descomptades de l'objectiu diari.`;
+    }
+
+    function startReturnWalk(){
+      if(!walkSession||!walkSession.origin){
+        routeInfo.textContent='No s\'ha trobat el punt d\'origen desat.';
+        return;
+      }
+      walkSession.activeLeg='return';
+      walkSession.startedAt=Date.now();
+      saveWalkSession();
+      setWalkButtonsVisibility({});
+      ensureWalkWatcher();
+    }
+
+    function claimReturnReward(){
+      if(!walkSession||walkSession.returnElapsedSeconds==null)return;
+      const burnedKcal=getLegKcalFromElapsed('return',walkSession.returnElapsedSeconds);
+      addBurnedCaloriesToToday(burnedKcal);
+      walkSession.returnClaimed=true;
+      saveWalkSession();
+      routeInfo.textContent=`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`;
+      walkSession=null;
+      saveWalkSession();
+      stopWalkTimer();
+      stopWalkWatcher();
+      setWalkButtonsVisibility({start:!!currentRoute});
     }
 
     function saveProfileFromForm(prefix){
@@ -597,6 +857,15 @@
       setArcProgress('arc-month','val-month',monthKcal,monthlyKcalGoal);
     }
 
+    try{
+      walkSession=JSON.parse(localStorage.getItem('wisewalk-walk-session')||'null');
+    }catch(_){
+      walkSession=null;
+    }
+    if(walkSession&&walkSession.origin&&walkSession.destination){
+      currentRoute={start:walkSession.origin,end:walkSession.destination};
+    }
+
     window.wiseWalkSetLocation=function(lat,lng){
       setRouteUserLocation(lat,lng);
     };
@@ -620,6 +889,10 @@
     btnBack.addEventListener('click',()=>showScreen('main'));
     btnGenerateRoute.addEventListener('click',generateRandomRoute);
     btnOpenMaps.addEventListener('click',openInGoogleMaps);
+    btnStartWalk.addEventListener('click',startOutboundWalk);
+    btnClaimOutbound.addEventListener('click',claimOutboundReward);
+    btnReturnOrigin.addEventListener('click',startReturnWalk);
+    btnClaimReturn.addEventListener('click',claimReturnReward);
     themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
     document.getElementById('color-selector').addEventListener('click',e=>{
       const option=e.target.closest('.color-option');
@@ -634,6 +907,7 @@
     if(loadProfile()){
       updateCalorieGoals();
       showScreen('main');
+      restoreWalkUi();
     }else{
       showScreen('setup');
     }
