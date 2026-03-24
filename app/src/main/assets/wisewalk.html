@@ -240,10 +240,7 @@
 
     function sanitizeApiKey(key){
       if(key==null)return '';
-      return String(key)
-        .trim()
-        .replace(/(?:=|\/)+$/g,'')
-        .replace(/(?:%3[dD]|%2[fF])+$/g,'');
+      return String(key).trim();
     }
 
     function setTheme(theme){
