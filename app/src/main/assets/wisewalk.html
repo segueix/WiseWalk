@@ -357,7 +357,7 @@
       const R=6371;
       const dLat=(lat2-lat1)*Math.PI/180;
       const dLon=(lon2-lon1)*Math.PI/180;
-      const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+      const a=Math.pow(Math.sin(dLat/2), 2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.pow(Math.sin(dLon/2), 2);
       return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
     }
 
@@ -431,7 +431,7 @@
       return speedMetList.map(item=>{
         const timeHours=totalDistanceKm/item.speed;
         const kcal=Math.round(item.met*userWeight*timeHours);
-        return {...item,kcal};
+        return Object.assign({}, item, {kcal: kcal});
       });
     }
 
@@ -474,7 +474,7 @@
       const oneWayDist=haversineDistance(userLocation.lat,userLocation.lng,dest.lat,dest.lng);
       const totalDist=oneWayDist*2;
       const totalDurationMin=totalDist/5*60;
-      currentRoute={start:{...userLocation},end:dest};
+      currentRoute={start: Object.assign({}, userLocation), end: dest};
       renderRouteMetrics(totalDist,totalDurationMin);
       routeInfo.textContent='Ruta aproximada generada (mode offline).';
     }
@@ -490,14 +490,12 @@
 
       try{
         const candidates=buildCandidatePoints(targetDistanceKm);
-        const osrmResponses=await Promise.allSettled(
-          candidates.map(candidate=>fetchOsrmRoute(userLocation,candidate))
+        const osrmResponses=await Promise.all(
+          candidates.map(candidate=>fetchOsrmRoute(userLocation,candidate).catch(err=>null))
         );
 
         const validRoutes=osrmResponses
-          .filter(result=>result.status==='fulfilled')
-          .map(result=>result.value)
-          .filter(data=>data.code==='Ok'&&data.routes&&data.routes[0]&&data.waypoints&&data.waypoints[1]&&data.waypoints[1].location);
+          .filter(data=>data&&data.code==='Ok'&&data.routes&&data.routes[0]&&data.waypoints&&data.waypoints[1]&&data.waypoints[1].location);
 
         if(!validRoutes.length){
           throw new Error('No hi ha rutes vàlides disponibles');
@@ -516,10 +514,7 @@
         const totalDistKm=oneWayDistanceKm*2;
         const totalDurationMin=(route.duration*2)/60;
 
-        currentRoute={
-          start:{...userLocation},
-          end:{lat:snapped[1],lng:snapped[0]}
-        };
+        currentRoute={start: Object.assign({}, userLocation), end: {lat: snapped[1], lng: snapped[0]}};
 
         renderRouteMetrics(totalDistKm,totalDurationMin);
         routeInfo.textContent='Ruta real generada! Distància basada en camins.';
