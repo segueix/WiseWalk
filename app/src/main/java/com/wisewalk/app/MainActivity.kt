@@ -2,8 +2,10 @@ package com.wisewalk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -32,6 +34,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+
+    private val statsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != StepTrackingService.ACTION_STATS_UPDATE) return
+
+            if (intent.getBooleanExtra("water_update", false)) {
+                val glasses = intent.getIntExtra("water_glasses", 0)
+                val js = "window.wiseWalkUpdateStats && window.wiseWalkUpdateStats({waterGlasses:$glasses});"
+                binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+                return
+            }
+
+            val json = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON) ?: return
+            val js = "window.wiseWalkUpdateStats && window.wiseWalkUpdateStats($json);"
+            binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,10 +107,17 @@ class MainActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
+        val filter = IntentFilter(StepTrackingService.ACTION_STATS_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statsReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(statsReceiver, filter)
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        try { unregisterReceiver(statsReceiver) } catch (_: Exception) {}
     }
     
     private fun hasLocationPermission(): Boolean {
