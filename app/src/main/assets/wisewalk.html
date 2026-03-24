@@ -196,6 +196,16 @@
               <div><label for="sleep-config" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-config" required></div>
             </div>
           </div>
+          <div class="form-group">
+            <label for="api-key-config">Clau API d'OpenRouteService</label>
+            <div class="input-wrapper">
+              <input type="password" id="api-key-config" placeholder="Ex: 5b3ce35978..." autocomplete="off">
+            </div>
+            <small style="display:block;margin-top:.45rem;color:var(--text-soft)">
+              Necessària per calcular rutes i elevació.
+              <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer">Crea-la aquí</a>.
+            </small>
+          </div>
           <button type="submit" class="btn">Desar canvis</button>
         </form>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
@@ -222,7 +232,6 @@
     let currentRoute=null;
     let previousDestination=null;
     let currentRouteMetrics=null;
-    const ORS_API_KEY='LA_TEVA_API_KEY_AQUI';
     const WALK_SPEEDS_KMH=[4.0,4.5,5.0,5.5,6.0];
 
     const formatDecimal=n=>n.toString().replace('.',',');
@@ -261,6 +270,7 @@
 
     function loadConfigForm(){
       const profile=loadProfile();
+      document.getElementById('api-key-config').value=localStorage.getItem('wisewalk-ors-apikey')||'';
       if(!profile)return;
       document.getElementById('age-config').value=profile.ageYears;
       document.getElementById('height-config').value=profile.heightCm;
@@ -356,8 +366,12 @@
     }
 
     async function fetchRouteWithOrs(start,end){
+      const apiKey=(localStorage.getItem('wisewalk-ors-apikey')||'').trim();
+      if(!apiKey){
+        throw new Error('Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).');
+      }
       const params=new URLSearchParams({
-        api_key:ORS_API_KEY,
+        api_key:apiKey,
         start:`${start.lng},${start.lat}`,
         end:`${end.lng},${end.lat}`,
         format:'geojson',
@@ -436,8 +450,8 @@
         getLocation();
         return;
       }
-      if(!ORS_API_KEY||ORS_API_KEY==='LA_TEVA_API_KEY_AQUI'){
-        routeInfo.textContent='Configura la clau ORS_API_KEY abans de generar rutes.';
+      if(!(localStorage.getItem('wisewalk-ors-apikey')||'').trim()){
+        routeInfo.textContent='Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).';
         return;
       }
 
@@ -481,6 +495,10 @@
 
     function saveProfileFromForm(prefix){
       const sex=document.querySelector(`input[name="sex-${prefix}"]:checked`).value;
+      if(prefix==='config'){
+        const apiKey=(document.getElementById('api-key-config').value||'').trim();
+        localStorage.setItem('wisewalk-ors-apikey',apiKey);
+      }
       saveProfile({
         sex,
         ageYears:document.getElementById(`age-${prefix}`).value,
