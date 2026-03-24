@@ -238,6 +238,14 @@
     const loadProfile=()=>{try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}};
     const saveProfile=p=>localStorage.setItem('wisewalk-profile',JSON.stringify(p));
 
+    function sanitizeApiKey(key){
+      if(key==null)return '';
+      return String(key)
+        .trim()
+        .replace(/(?:=|\/)+$/g,'')
+        .replace(/(?:%3[dD]|%2[fF])+$/g,'');
+    }
+
     function setTheme(theme){
       html.setAttribute('data-theme',theme);
       localStorage.setItem('wisewalk-theme',theme);
@@ -270,7 +278,7 @@
 
     function loadConfigForm(){
       const profile=loadProfile();
-      document.getElementById('api-key-config').value=localStorage.getItem('wisewalk-ors-apikey')||'';
+      document.getElementById('api-key-config').value=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
       if(!profile)return;
       document.getElementById('age-config').value=profile.ageYears;
       document.getElementById('height-config').value=profile.heightCm;
@@ -366,7 +374,7 @@
     }
 
     async function fetchRouteWithOrs(start,end){
-      const apiKey=(localStorage.getItem('wisewalk-ors-apikey')||'').trim();
+      const apiKey=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
       if(!apiKey){
         throw new Error('Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).');
       }
@@ -450,7 +458,7 @@
         getLocation();
         return;
       }
-      if(!(localStorage.getItem('wisewalk-ors-apikey')||'').trim()){
+      if(!sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'))){
         routeInfo.textContent='Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).';
         return;
       }
@@ -496,7 +504,7 @@
     function saveProfileFromForm(prefix){
       const sex=document.querySelector(`input[name="sex-${prefix}"]:checked`).value;
       if(prefix==='config'){
-        const apiKey=(document.getElementById('api-key-config').value||'').trim();
+        const apiKey=sanitizeApiKey(document.getElementById('api-key-config').value);
         localStorage.setItem('wisewalk-ors-apikey',apiKey);
       }
       saveProfile({
