@@ -67,6 +67,8 @@ class MainActivity : AppCompatActivity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             allowFileAccess = true
             allowContentAccess = true
+            @Suppress("DEPRECATION")
+            allowUniversalAccessFromFileURLs = true
             builtInZoomControls = false
             displayZoomControls = false
             mediaPlaybackRequiresUserGesture = true
