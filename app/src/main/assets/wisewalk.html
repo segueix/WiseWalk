@@ -454,7 +454,7 @@
 
     function renderRouteMetrics(totalDistKm,totalDurationMin){
       const kcalBySpeed=renderRouteSpeedKcal(totalDistKm);
-      const kcalAtFive=kcalBySpeed.find(item=>item.speed===5)?.kcal||0;
+      const kcalAtFive=(kcalBySpeed.find(item=>item.speed===5)||{}).kcal||0;
       document.getElementById('route-distance').textContent=formatDecimal((Math.round(totalDistKm*10)/10).toFixed(1))+' km';
       document.getElementById('route-time').textContent='~'+Math.round(totalDurationMin)+' min';
       document.getElementById('route-kcal').textContent='~'+kcalAtFive+' kcal';
@@ -497,7 +497,7 @@
         const validRoutes=osrmResponses
           .filter(result=>result.status==='fulfilled')
           .map(result=>result.value)
-          .filter(data=>data.code==='Ok'&&data.routes?.[0]&&data.waypoints?.[1]?.location);
+          .filter(data=>data.code==='Ok'&&data.routes&&data.routes[0]&&data.waypoints&&data.waypoints[1]&&data.waypoints[1].location);
 
         if(!validRoutes.length){
           throw new Error('No hi ha rutes vàlides disponibles');
