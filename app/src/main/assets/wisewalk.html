@@ -708,6 +708,9 @@
     }
 
     async function generateRandomRoute(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
+        WiseWalkAndroid.requestPermissions();
+      }
       if(!userLocation){
         getLocation();
         return;

@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -93,7 +94,7 @@ class StepTrackingService : Service(), SensorEventListener {
                     isRunning = true
                     resetIfNewDay()
                     loadProfileFromPrefs()
-                    startForeground(NOTIF_ID_SERVICE, buildServiceNotification())
+                    startTrackingForeground()
                     registerStepListener()
                     scheduleWaterReminders()
                 }
@@ -104,12 +105,25 @@ class StepTrackingService : Service(), SensorEventListener {
                 isRunning = true
                 resetIfNewDay()
                 loadProfileFromPrefs()
-                startForeground(NOTIF_ID_SERVICE, buildServiceNotification())
+                startTrackingForeground()
                 registerStepListener()
                 scheduleWaterReminders()
             }
         }
         return START_STICKY
+    }
+
+    private fun startTrackingForeground() {
+        val notification = buildServiceNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIF_ID_SERVICE,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            )
+        } else {
+            startForeground(NOTIF_ID_SERVICE, notification)
+        }
     }
 
     override fun onDestroy() {
