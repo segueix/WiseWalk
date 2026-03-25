@@ -84,6 +84,14 @@
     body.map-mode #card-route{background:transparent;box-shadow:none;padding:0;margin:0}
     body.map-mode .route-container{background:rgba(255,255,255,.90);backdrop-filter:blur(4px)}
     [data-theme="dark"] body.map-mode .route-container{background:rgba(32,36,36,.82)}
+    .map-bar{display:none;align-items:center;gap:.75rem;padding:.25rem 0}
+    body.map-mode .map-bar{display:flex}
+    body.map-mode #route-info{display:none}
+    body.map-mode .route-details{display:none!important}
+    body.map-mode #calorie-table{display:none!important}
+    body.map-mode #btn-generate-route{display:none!important}
+    .map-back-btn{width:36px;height:36px;font-size:1.1rem;border-radius:10px;flex-shrink:0;background:var(--accent);color:#fff}
+    .map-bar-info{flex:1;font-weight:600;font-size:.95rem;color:var(--text)}
   </style>
 </head>
 <body>
@@ -165,6 +173,10 @@
       <section class="card" id="card-route">
         <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km (3,0 km totals)</div></div></div>
         <div class="route-container">
+          <div class="map-bar" id="map-bar">
+            <button class="icon-btn map-back-btn" id="btn-exit-map" title="Sortir del mapa">←</button>
+            <span class="map-bar-info" id="map-bar-info"></span>
+          </div>
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
@@ -225,10 +237,11 @@
           <div class="form-group">
             <label for="google-maps-key-config">Clau API de Google Maps</label>
             <div class="input-wrapper">
-              <input type="text" id="google-maps-key-config" placeholder="Posa la clau al AndroidManifest.xml" autocomplete="off" disabled>
+              <input type="password" id="google-maps-key-config" placeholder="Ex: AIzaSy..." autocomplete="off">
             </div>
             <small style="display:block;margin-top:.45rem;color:var(--text-soft)">
-              Aquesta clau es configura a <code>AndroidManifest.xml</code> (meta-data <code>com.google.android.geo.API_KEY</code>).
+              Necessària per veure el mapa natiu amb la ruta.
+              <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Crea-la aquí</a>.
             </small>
           </div>
           <button type="submit" class="btn">Desar canvis</button>
@@ -265,6 +278,8 @@
     const btnReturnOrigin=document.getElementById('btn-return-origin');
     const btnClaimReturn=document.getElementById('btn-claim-return');
     const debugPanel=document.getElementById('debug-panel');
+    const btnExitMap=document.getElementById('btn-exit-map');
+    const mapBarInfo=document.getElementById('map-bar-info');
     const btnDebugSimulate=document.getElementById('btn-debug-simulate');
     const btnDebugDestination=document.getElementById('btn-debug-destination');
     const btnDebugOrigin=document.getElementById('btn-debug-origin');
@@ -326,6 +341,7 @@
     function loadConfigForm(){
       const profile=loadProfile();
       document.getElementById('api-key-config').value=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
+      document.getElementById('google-maps-key-config').value=sanitizeApiKey(localStorage.getItem('wisewalk-gmaps-apikey'));
       if(!profile)return;
       document.getElementById('age-config').value=profile.ageYears;
       document.getElementById('height-config').value=profile.heightCm;
@@ -425,15 +441,32 @@
       else localStorage.removeItem('wisewalk-walk-session');
     }
 
+    function setRouteInfoText(text){
+      routeInfo.textContent=text;
+      if(mapBarInfo)mapBarInfo.textContent=text;
+    }
+
     function setWalkButtonsVisibility({start=false,claimOutbound=false,returnOrigin=false,claimReturn=false}={}){
       btnStartWalk.style.display=start?'block':'none';
       btnClaimOutbound.style.display=claimOutbound?'block':'none';
       btnReturnOrigin.style.display=returnOrigin?'block':'none';
       btnClaimReturn.style.display=claimReturn?'block':'none';
+      const showOpenMaps=(start||claimOutbound||claimReturn||returnOrigin)&&!!currentRoute;
+      btnOpenMaps.style.display=showOpenMaps?'block':'none';
     }
 
     function setMapMode(enabled){
       document.body.classList.toggle('map-mode',!!enabled);
+    }
+
+    function exitMapMode(){
+      stopWalkTimer();
+      stopWalkWatcher();
+      walkSession=null;
+      saveWalkSession();
+      setMapMode(false);
+      setWalkButtonsVisibility({start:!!currentRoute});
+      setRouteInfoText(currentRoute?'Ruta disponible. Prem "Iniciar" per començar.':'Genera una ruta per començar.');
     }
 
     function setDebugPanelVisibility(visible){
@@ -501,7 +534,7 @@
       const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
       const remaining=Math.round(getDistanceToTargetMeters(target));
       const phase=walkSession.activeLeg==='outbound'?'anada':'tornada';
-      routeInfo.textContent=`Temps ${phase}: ${min}:${sec} · Distància al punt: ${remaining} m`;
+      setRouteInfoText(`Temps ${phase}: ${min}:${sec} · Distància al punt: ${remaining} m`);
     }
 
     function startWalkTimer(){
@@ -523,7 +556,7 @@
         stopWalkWatcher();
         saveWalkSession();
         setWalkButtonsVisibility({claimOutbound:true});
-        routeInfo.textContent='Has arribat al destí! Prem "Reclamar anada".';
+        setRouteInfoText('Has arribat al destí! Prem "Reclamar anada".');
       }else if(leg==='return'){
         walkSession.returnElapsedSeconds=elapsedSeconds;
         walkSession.activeLeg=null;
@@ -532,7 +565,7 @@
         stopWalkWatcher();
         saveWalkSession();
         setWalkButtonsVisibility({claimReturn:true});
-        routeInfo.textContent='Has arribat al punt d\'origen! Prem "Reclamar tornada".';
+        setRouteInfoText('Has arribat al punt d\'origen! Prem "Reclamar tornada".');
       }
     }
 
@@ -546,7 +579,7 @@
       }
 
       if(!('geolocation' in navigator)){
-        routeInfo.textContent='Geolocalització no disponible per controlar l\'arribada.';
+        setRouteInfoText('Geolocalització no disponible per controlar l\'arribada.');
         return;
       }
       if(walkWatchId!=null)return;
@@ -708,11 +741,11 @@
         renderActiveWalkStatus();
         return;
       }
-      routeInfo.textContent='Ubicació obtinguda! Genera una ruta.';
+      setRouteInfoText('Ubicació obtinguda! Genera una ruta.');
     }
 
     function getLocation(){
-      routeInfo.textContent='Obtenint ubicació...';
+      setRouteInfoText('Obtenint ubicació...');
       if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
         WiseWalkAndroid.getLocation();
         return;
@@ -720,12 +753,12 @@
       if('geolocation' in navigator){
         navigator.geolocation.getCurrentPosition(
           pos=>setRouteUserLocation(pos.coords.latitude,pos.coords.longitude),
-          err=>{routeInfo.textContent='Error ubicació: '+err.message;},
+          err=>{setRouteInfoText('Error ubicació: '+err.message);},
           {enableHighAccuracy:true,timeout:15000}
         );
         return;
       }
-      routeInfo.textContent='Geolocalització no disponible';
+      setRouteInfoText('Geolocalització no disponible');
     }
 
     function sendRouteToNative(coordinates){
@@ -746,11 +779,11 @@
         return;
       }
       if(!sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'))){
-        routeInfo.textContent='Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).';
+        setRouteInfoText('Palta configurar la Clau API d\'OpenRouteService a Configuració (⚙️).');
         return;
       }
 
-      routeInfo.textContent='Calculant camins i elevació...';
+      setRouteInfoText('Calculant camins i elevació...');
       btnGenerateRoute.disabled=true;
 
       try{
@@ -780,11 +813,10 @@
         renderCalorieTable(totalDistanceKm,totalPositiveGainM);
 
         routeDetails.style.display='flex';
-        btnOpenMaps.style.display='block';
         setWalkButtonsVisibility({start:true});
-        routeInfo.textContent='Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.';
+        setRouteInfoText('Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.');
       }catch(err){
-        routeInfo.textContent=err.message||'Error en generar la ruta.';
+        setRouteInfoText(err.message||'Error en generar la ruta.');
       }finally{
         btnGenerateRoute.disabled=false;
       }
@@ -799,7 +831,7 @@
 
     function startOutboundWalk(){
       if(!currentRoute||!currentRoute.start||!currentRoute.end){
-        routeInfo.textContent='Primer genera una ruta.';
+        setRouteInfoText('Primer genera una ruta.');
         return;
       }
       walkSession={
@@ -826,12 +858,12 @@
       walkSession.outboundClaimed=true;
       saveWalkSession();
       setWalkButtonsVisibility({returnOrigin:true});
-      routeInfo.textContent=`Anada reclamada: ${burnedKcal} kcal descomptades de l'objectiu diari.`;
+      setRouteInfoText(`Anada reclamada: ${burnedKcal} kcal descomptades de l'objectiu diari.`);
     }
 
     function startReturnWalk(){
       if(!walkSession||!walkSession.origin){
-        routeInfo.textContent='No s\'ha trobat el punt d\'origen desat.';
+        setRouteInfoText('No s\'ha trobat el punt d\'origen desat.');
         return;
       }
       walkSession.activeLeg='return';
@@ -847,7 +879,7 @@
       addBurnedCaloriesToToday(burnedKcal);
       walkSession.returnClaimed=true;
       saveWalkSession();
-      routeInfo.textContent=`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`;
+      setRouteInfoText(`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`);
       walkSession=null;
       setMapMode(false);
       saveWalkSession();
@@ -878,21 +910,20 @@
       renderCalorieTable(totalDistanceKm,totalPositiveGainM);
 
       routeDetails.style.display='flex';
-      btnOpenMaps.style.display='block';
       setWalkButtonsVisibility({start:true});
-      routeInfo.textContent='[DEBUG] Ruta simulada de 3,0 km preparada. Ja pots prémer "Iniciar".';
+      setRouteInfoText('[DEBUG] Ruta simulada de 3,0 km preparada. Ja pots prémer "Iniciar".');
     }
 
     function jumpToDestination(){
       if(!currentRoute){
-        routeInfo.textContent='[DEBUG] Simula una ruta abans de saltar al destí.';
+        setRouteInfoText('[DEBUG] Simula una ruta abans de saltar al destí.');
         return;
       }
       if(!walkSession||walkSession.activeLeg!=='outbound'){
         startOutboundWalk();
       }
       if(!walkSession||!walkSession.destination){
-        routeInfo.textContent='[DEBUG] No s\'ha pogut iniciar el tram d\'anada.';
+        setRouteInfoText('[DEBUG] No s\'ha pogut iniciar el tram d\'anada.');
         return;
       }
       stopWalkWatcher();
@@ -902,11 +933,11 @@
 
     function jumpToOrigin(){
       if(!walkSession||!walkSession.origin){
-        routeInfo.textContent='[DEBUG] No hi ha una sessió activa amb origen.';
+        setRouteInfoText('[DEBUG] No hi ha una sessió activa amb origen.');
         return;
       }
       if(walkSession.outboundElapsedSeconds==null&&walkSession.activeLeg!=='return'){
-        routeInfo.textContent='[DEBUG] Primer completa l\'anada (pots usar "Saltar al Destí").';
+        setRouteInfoText('[DEBUG] Primer completa l\'anada (pots usar "Saltar al Destí").');
         return;
       }
       if(walkSession.outboundClaimed!==true){
@@ -925,6 +956,11 @@
       if(prefix==='config'){
         const apiKey=sanitizeApiKey(document.getElementById('api-key-config').value);
         localStorage.setItem('wisewalk-ors-apikey',apiKey);
+        const gmapsKey=sanitizeApiKey(document.getElementById('google-maps-key-config').value);
+        localStorage.setItem('wisewalk-gmaps-apikey',gmapsKey);
+        if(window.WiseWalkAndroid&&WiseWalkAndroid.setGoogleMapsApiKey){
+          WiseWalkAndroid.setGoogleMapsApiKey(gmapsKey);
+        }
       }
       saveProfile({
         sex,
@@ -1027,6 +1063,7 @@
     btnClaimOutbound.addEventListener('click',claimOutboundReward);
     btnReturnOrigin.addEventListener('click',startReturnWalk);
     btnClaimReturn.addEventListener('click',claimReturnReward);
+    btnExitMap.addEventListener('click',exitMapMode);
     btnDebugSimulate.addEventListener('click',simulateRouteAndLocation);
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
