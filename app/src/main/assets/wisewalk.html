@@ -716,6 +716,15 @@
       routeInfo.textContent='Geolocalització no disponible';
     }
 
+    function sendRouteToNative(coordinates){
+      if(!Array.isArray(coordinates)||coordinates.length===0)return;
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.drawRoute){
+        try{
+          WiseWalkAndroid.drawRoute(JSON.stringify(coordinates));
+        }catch(_){}
+      }
+    }
+
     async function generateRandomRoute(){
       if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
         WiseWalkAndroid.requestPermissions();
@@ -744,6 +753,10 @@
         currentRoute={start:userLocation,end:routeResult.destination};
         previousDestination=routeResult.destination;
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
+        const geometry=routeResult.data.features[0].geometry;
+        if(geometry&&Array.isArray(geometry.coordinates)){
+          sendRouteToNative(geometry.coordinates);
+        }
         walkSession=null;
         saveWalkSession();
         localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));

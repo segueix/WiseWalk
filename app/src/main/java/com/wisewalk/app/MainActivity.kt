@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
+import android.graphics.Color
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -23,10 +24,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.PolylineOptions
 import com.wisewalk.app.databinding.ActivityMainBinding
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -196,6 +202,47 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
+    private fun drawRoute(coordinatesJson: String) {
+        val map = mMap ?: return
+        try {
+            val coordinates = JSONArray(coordinatesJson)
+            val points = mutableListOf<LatLng>()
+            val boundsBuilder = LatLngBounds.Builder()
+
+            for (i in 0 until coordinates.length()) {
+                val point = coordinates.optJSONArray(i) ?: continue
+                if (point.length() < 2) continue
+
+                val lng = point.optDouble(0, Double.NaN)
+                val lat = point.optDouble(1, Double.NaN)
+                if (lat.isNaN() || lng.isNaN()) continue
+
+                val latLng = LatLng(lat, lng)
+                points.add(latLng)
+                boundsBuilder.include(latLng)
+            }
+
+            map.clear()
+            if (points.size < 2) {
+                enableMyLocationOnMap()
+                return
+            }
+
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(points)
+                    .color(Color.parseColor("#2E7D32"))
+                    .width(12f)
+            )
+
+            val paddingPx = (resources.displayMetrics.density * 72).toInt()
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), paddingPx))
+            enableMyLocationOnMap()
+        } catch (_: Throwable) {
+            // Ignore malformed route payloads from JS bridge.
+        }
+    }
+
     private fun updateGoalFromProfile(json: String) {
         try {
             val o = JSONObject(json)
@@ -362,6 +409,11 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
                 activity.startService(intent)
             }
+        }
+
+        @JavascriptInterface
+        fun drawRoute(coordinatesJson: String) {
+            activity.runOnUiThread { activity.drawRoute(coordinatesJson) }
         }
 
     }
