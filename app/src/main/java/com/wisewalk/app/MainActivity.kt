@@ -2,8 +2,10 @@ package com.wisewalk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -32,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+    private var locationReceiver: BroadcastReceiver? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,6 +83,23 @@ class MainActivity : AppCompatActivity() {
 
         wv.loadUrl("file:///android_asset/wisewalk.html")
 
+        locationReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != StepTrackingService.ACTION_LOCATION_UPDATE) return
+                val lat = intent.getDoubleExtra(StepTrackingService.EXTRA_LAT, 0.0)
+                val lng = intent.getDoubleExtra(StepTrackingService.EXTRA_LNG, 0.0)
+                if (lat != 0.0 && lng != 0.0) {
+                    sendLocationToWeb(lat, lng)
+                }
+            }
+        }
+        val locationFilter = IntentFilter(StepTrackingService.ACTION_LOCATION_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(locationReceiver, locationFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(locationReceiver, locationFilter)
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (wv.canGoBack()) wv.goBack() else finish()
@@ -94,6 +114,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        locationReceiver?.let { unregisterReceiver(it) }
+        locationReceiver = null
+        super.onDestroy()
     }
     
     private fun hasLocationPermission(): Boolean {
@@ -289,6 +315,30 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getLocation() {
             activity.runOnUiThread { activity.getCurrentLocation() }
+        }
+
+        @JavascriptInterface
+        fun startWalkLocationUpdates() {
+            activity.runOnUiThread {
+                val intent = Intent(activity, StepTrackingService::class.java).apply {
+                    action = StepTrackingService.ACTION_START_GPS
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    activity.startForegroundService(intent)
+                } else {
+                    activity.startService(intent)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun stopWalkLocationUpdates() {
+            activity.runOnUiThread {
+                val intent = Intent(activity, StepTrackingService::class.java).apply {
+                    action = StepTrackingService.ACTION_STOP_GPS
+                }
+                activity.startService(intent)
+            }
         }
 
     }
