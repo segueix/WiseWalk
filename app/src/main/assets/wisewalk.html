@@ -71,6 +71,11 @@
     .arc-value{fill:none;stroke:var(--accent);stroke-width:8;stroke-linecap:round;stroke-dasharray:125.66;stroke-dashoffset:125.66;transition:stroke-dashoffset .8s ease-out}
     .progress-label{font-size:.8rem;color:var(--text-soft);margin-top:.25rem}
     .progress-value{font-size:.85rem;font-weight:600}
+    .debug-panel{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);width:min(420px,calc(100vw - 2rem));background:var(--bg-card);border:1px solid var(--border);border-radius:14px;box-shadow:0 6px 24px var(--shadow);padding:.75rem;display:none;z-index:999}
+    .debug-panel.visible{display:block}
+    .debug-title{font-size:.8rem;font-weight:700;color:var(--text-soft);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em}
+    .debug-actions{display:grid;grid-template-columns:1fr;gap:.5rem}
+    .debug-btn{margin-top:0;padding:.6rem .75rem;font-size:.82rem;border-radius:10px}
     footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
   </style>
 </head>
@@ -217,6 +222,15 @@
     </div>
   </div>
 
+  <div id="debug-panel" class="debug-panel" aria-hidden="true">
+    <div class="debug-title">Mode Debug</div>
+    <div class="debug-actions">
+      <button class="btn btn-secondary debug-btn" id="btn-debug-simulate">🧪 Simular Ubicació i Ruta</button>
+      <button class="btn btn-secondary debug-btn" id="btn-debug-destination">📍 Saltar al Destí</button>
+      <button class="btn btn-secondary debug-btn" id="btn-debug-origin">↩️ Saltar a l'Origen</button>
+    </div>
+  </div>
+
   <script>
     const screenSetup=document.getElementById('screen-setup');
     const screenMain=document.getElementById('screen-main');
@@ -234,8 +248,16 @@
     const btnClaimOutbound=document.getElementById('btn-claim-outbound');
     const btnReturnOrigin=document.getElementById('btn-return-origin');
     const btnClaimReturn=document.getElementById('btn-claim-return');
+    const debugPanel=document.getElementById('debug-panel');
+    const btnDebugSimulate=document.getElementById('btn-debug-simulate');
+    const btnDebugDestination=document.getElementById('btn-debug-destination');
+    const btnDebugOrigin=document.getElementById('btn-debug-origin');
+    const appTitle=document.querySelector('h1');
     const html=document.documentElement;
     const metaTheme=document.querySelector('meta[name="theme-color"]');
+    const urlParams=new URLSearchParams(window.location.search);
+    const debugModeFromQuery=urlParams.get('debug')==='true';
+    let debugPanelVisible=debugModeFromQuery;
     let userLocation=null;
     let currentRoute=null;
     let previousDestination=null;
@@ -392,6 +414,12 @@
       btnClaimOutbound.style.display=claimOutbound?'block':'none';
       btnReturnOrigin.style.display=returnOrigin?'block':'none';
       btnClaimReturn.style.display=claimReturn?'block':'none';
+    }
+
+    function setDebugPanelVisibility(visible){
+      debugPanelVisible=visible;
+      debugPanel.classList.toggle('visible',visible);
+      debugPanel.setAttribute('aria-hidden',visible?'false':'true');
     }
 
     function getTodayIsoDate(){
@@ -786,6 +814,69 @@
       setWalkButtonsVisibility({start:!!currentRoute});
     }
 
+    function simulateRouteAndLocation(){
+      const simulatedOrigin={lat:41.3874,lng:2.1686};
+      const simulatedDestination=calculateRandomDestination(simulatedOrigin,TARGET_OUTBOUND_DISTANCE_M);
+      const totalDistanceKm=TARGET_TOTAL_DISTANCE_KM;
+      const totalPositiveGainM=72;
+      const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
+
+      userLocation={lat:simulatedOrigin.lat,lng:simulatedOrigin.lng};
+      currentRoute={start:simulatedOrigin,end:simulatedDestination};
+      previousDestination=simulatedDestination;
+      currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
+      walkSession=null;
+      saveWalkSession();
+      localStorage.setItem('wisewalk-last-origin',JSON.stringify(simulatedOrigin));
+
+      document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
+      document.getElementById('route-elevation').textContent=`+${Math.round(totalPositiveGainM)} m`;
+      document.getElementById('route-time').textContent=`~${timeAtFive} min`;
+      renderCalorieTable(totalDistanceKm,totalPositiveGainM);
+
+      routeDetails.style.display='flex';
+      btnOpenMaps.style.display='block';
+      setWalkButtonsVisibility({start:true});
+      routeInfo.textContent='[DEBUG] Ruta simulada de 4,0 km preparada. Ja pots prémer "Iniciar".';
+    }
+
+    function jumpToDestination(){
+      if(!currentRoute){
+        routeInfo.textContent='[DEBUG] Simula una ruta abans de saltar al destí.';
+        return;
+      }
+      if(!walkSession||walkSession.activeLeg!=='outbound'){
+        startOutboundWalk();
+      }
+      if(!walkSession||!walkSession.destination){
+        routeInfo.textContent='[DEBUG] No s\'ha pogut iniciar el tram d\'anada.';
+        return;
+      }
+      stopWalkWatcher();
+      setRouteUserLocation(walkSession.destination.lat,walkSession.destination.lng);
+      ensureWalkWatcher();
+    }
+
+    function jumpToOrigin(){
+      if(!walkSession||!walkSession.origin){
+        routeInfo.textContent='[DEBUG] No hi ha una sessió activa amb origen.';
+        return;
+      }
+      if(walkSession.outboundElapsedSeconds==null&&walkSession.activeLeg!=='return'){
+        routeInfo.textContent='[DEBUG] Primer completa l\'anada (pots usar "Saltar al Destí").';
+        return;
+      }
+      if(walkSession.outboundClaimed!==true){
+        claimOutboundReward();
+      }
+      if(walkSession.activeLeg!=='return'){
+        startReturnWalk();
+      }
+      stopWalkWatcher();
+      setRouteUserLocation(walkSession.origin.lat,walkSession.origin.lng);
+      ensureWalkWatcher();
+    }
+
     function saveProfileFromForm(prefix){
       const sex=document.querySelector(`input[name="sex-${prefix}"]:checked`).value;
       if(prefix==='config'){
@@ -893,6 +984,10 @@
     btnClaimOutbound.addEventListener('click',claimOutboundReward);
     btnReturnOrigin.addEventListener('click',startReturnWalk);
     btnClaimReturn.addEventListener('click',claimReturnReward);
+    btnDebugSimulate.addEventListener('click',simulateRouteAndLocation);
+    btnDebugDestination.addEventListener('click',jumpToDestination);
+    btnDebugOrigin.addEventListener('click',jumpToOrigin);
+    appTitle.addEventListener('dblclick',()=>setDebugPanelVisibility(!debugPanelVisible));
     themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
     document.getElementById('color-selector').addEventListener('click',e=>{
       const option=e.target.closest('.color-option');
@@ -911,6 +1006,7 @@
     }else{
       showScreen('setup');
     }
+    setDebugPanelVisibility(debugModeFromQuery);
   </script>
 </body>
 </html>
