@@ -156,7 +156,7 @@
         </div>
       </section>
       <section class="card" id="card-route">
-        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 2,0 km (4,0 km totals)</div></div></div>
+        <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km (3,0 km totals)</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
@@ -568,7 +568,7 @@
       setWalkButtonsVisibility({start:!!currentRoute});
     }
 
-    const TARGET_TOTAL_DISTANCE_KM=4.0;
+    const TARGET_TOTAL_DISTANCE_KM=3.0;
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.2;
 
@@ -669,7 +669,7 @@
       }
 
       if(!chosenData||!chosenDestination){
-        throw new Error('No s\'ha pogut generar una ruta de 4 km dins del rang desitjat');
+        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat');
       }
       return {data:chosenData,destination:chosenDestination};
     }
@@ -742,7 +742,7 @@
         routeDetails.style.display='flex';
         btnOpenMaps.style.display='block';
         setWalkButtonsVisibility({start:true});
-        routeInfo.textContent='Ruta generada (4 km aprox.) amb arribada en camí/carrer accessible.';
+        routeInfo.textContent='Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.';
       }catch(err){
         routeInfo.textContent=err.message||'Error en generar la ruta.';
       }finally{
@@ -837,7 +837,7 @@
       routeDetails.style.display='flex';
       btnOpenMaps.style.display='block';
       setWalkButtonsVisibility({start:true});
-      routeInfo.textContent='[DEBUG] Ruta simulada de 4,0 km preparada. Ja pots prémer "Iniciar".';
+      routeInfo.textContent='[DEBUG] Ruta simulada de 3,0 km preparada. Ja pots prémer "Iniciar".';
     }
 
     function jumpToDestination(){
