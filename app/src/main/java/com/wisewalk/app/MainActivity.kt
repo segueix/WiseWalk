@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         val wv: WebView = binding.webView
 
         wv.webViewClient = WebViewClient()
+        wv.setBackgroundColor(Color.TRANSPARENT)
         
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
