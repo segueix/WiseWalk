@@ -215,6 +215,15 @@
               <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer">Crea-la aquí</a>.
             </small>
           </div>
+          <div class="form-group">
+            <label for="google-maps-key-config">Clau API de Google Maps</label>
+            <div class="input-wrapper">
+              <input type="text" id="google-maps-key-config" placeholder="Posa la clau al AndroidManifest.xml" autocomplete="off" disabled>
+            </div>
+            <small style="display:block;margin-top:.45rem;color:var(--text-soft)">
+              Aquesta clau es configura a <code>AndroidManifest.xml</code> (meta-data <code>com.google.android.geo.API_KEY</code>).
+            </small>
+          </div>
           <button type="submit" class="btn">Desar canvis</button>
         </form>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
