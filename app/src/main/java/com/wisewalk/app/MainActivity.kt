@@ -23,13 +23,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.OnMapReadyCallback
+import com.google.android.gms.maps.SupportMapFragment
 import com.wisewalk.app.databinding.ActivityMainBinding
 import org.json.JSONObject
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences("wisewalk_prefs", Context.MODE_PRIVATE) }
+    private var mMap: GoogleMap? = null
     
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
@@ -42,6 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        initMapFragment()
         
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -124,6 +129,23 @@ class MainActivity : AppCompatActivity() {
     
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun initMapFragment() {
+        val mapFragment = supportFragmentManager.findFragmentById(R.id.mapFragment) as? SupportMapFragment
+        mapFragment?.getMapAsync(this)
+    }
+
+    override fun onMapReady(googleMap: GoogleMap) {
+        mMap = googleMap
+        enableMyLocationOnMap()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun enableMyLocationOnMap() {
+        if (hasLocationPermission()) {
+            mMap?.isMyLocationEnabled = true
+        }
     }
     
     private fun requestLocationPermission() {
@@ -240,6 +262,7 @@ class MainActivity : AppCompatActivity() {
                 
                 if (granted) {
                     getCurrentLocation()
+                    enableMyLocationOnMap()
                 }
             }
         }

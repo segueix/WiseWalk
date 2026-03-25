@@ -20,6 +20,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.WiseWalk"
         android:usesCleartextTraffic="true">
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="YOUR_GOOGLE_MAPS_API_KEY" />
         
         <activity
             android:name=".MainActivity"
