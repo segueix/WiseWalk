@@ -25,6 +25,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
+    private var isWalkGpsModeActive: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,8 +101,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 if (intent?.action != StepTrackingService.ACTION_LOCATION_UPDATE) return
                 val lat = intent.getDoubleExtra(StepTrackingService.EXTRA_LAT, 0.0)
                 val lng = intent.getDoubleExtra(StepTrackingService.EXTRA_LNG, 0.0)
+                val bearing = intent.getFloatExtra(StepTrackingService.EXTRA_BEARING, 0f)
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
+                    if (isWalkGpsModeActive) {
+                        animateCameraForWalkMode(lat, lng, bearing)
+                    }
                 }
             }
         }
@@ -241,6 +247,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         } catch (_: Throwable) {
             // Ignore malformed route payloads from JS bridge.
         }
+    }
+
+    private fun animateCameraForWalkMode(lat: Double, lng: Double, bearing: Float) {
+        val map = mMap ?: return
+        val cameraPosition = CameraPosition.Builder()
+            .target(LatLng(lat, lng))
+            .zoom(18f)
+            .tilt(45f)
+            .bearing(bearing)
+            .build()
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -390,6 +407,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         @JavascriptInterface
         fun startWalkLocationUpdates() {
             activity.runOnUiThread {
+                activity.isWalkGpsModeActive = true
                 val intent = Intent(activity, StepTrackingService::class.java).apply {
                     action = StepTrackingService.ACTION_START_GPS
                 }
@@ -404,6 +422,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         @JavascriptInterface
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
+                activity.isWalkGpsModeActive = false
                 val intent = Intent(activity, StepTrackingService::class.java).apply {
                     action = StepTrackingService.ACTION_STOP_GPS
                 }

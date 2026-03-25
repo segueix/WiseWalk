@@ -29,6 +29,9 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import org.json.JSONObject
 import java.time.LocalDate
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 class StepTrackingService : Service(), SensorEventListener {
 
@@ -53,6 +56,7 @@ class StepTrackingService : Service(), SensorEventListener {
     private var waterReminderReceiver: BroadcastReceiver? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
+    private var lastLocationForBearing: android.location.Location? = null
 
     companion object {
         const val CHANNEL_ID_SERVICE = "wisewalk_tracking"
@@ -71,6 +75,7 @@ class StepTrackingService : Service(), SensorEventListener {
         const val EXTRA_STATS_JSON = "stats_json"
         const val EXTRA_LAT = "lat"
         const val EXTRA_LNG = "lng"
+        const val EXTRA_BEARING = "bearing"
 
         @Volatile
         var isRunning = false
@@ -149,16 +154,33 @@ class StepTrackingService : Service(), SensorEventListener {
     private fun startLocationUpdates() {
         if (locationCallback != null) return
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
-            .setMinUpdateIntervalMillis(2000)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
+            .setWaitForAccurateLocation(true)
+            .setMinUpdateIntervalMillis(500)
             .build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { location ->
+                    val previousLocation = lastLocationForBearing
+                    val bearing = when {
+                        location.hasBearing() -> location.bearing
+                        previousLocation != null -> {
+                            computeBearing(
+                                previousLocation.latitude,
+                                previousLocation.longitude,
+                                location.latitude,
+                                location.longitude
+                            )
+                        }
+                        else -> 0f
+                    }
+                    lastLocationForBearing = location
+
                     val locationIntent = Intent(ACTION_LOCATION_UPDATE).apply {
                         putExtra(EXTRA_LAT, location.latitude)
                         putExtra(EXTRA_LNG, location.longitude)
+                        putExtra(EXTRA_BEARING, bearing)
                         setPackage(packageName)
                     }
                     sendBroadcast(locationIntent)
@@ -177,7 +199,19 @@ class StepTrackingService : Service(), SensorEventListener {
         locationCallback?.let {
             fusedLocationClient.removeLocationUpdates(it)
             locationCallback = null
+            lastLocationForBearing = null
         }
+    }
+
+    private fun computeBearing(startLat: Double, startLng: Double, endLat: Double, endLng: Double): Float {
+        val startLatRad = Math.toRadians(startLat)
+        val endLatRad = Math.toRadians(endLat)
+        val deltaLngRad = Math.toRadians(endLng - startLng)
+
+        val y = sin(deltaLngRad) * cos(endLatRad)
+        val x = cos(startLatRad) * sin(endLatRad) - sin(startLatRad) * cos(endLatRad) * cos(deltaLngRad)
+        val bearingDeg = Math.toDegrees(atan2(y, x))
+        return (((bearingDeg + 360.0) % 360.0)).toFloat()
     }
 
     private fun registerWaterReceiver() {
