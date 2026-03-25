@@ -464,6 +464,9 @@
     }
 
     function stopWalkWatcher(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.stopWalkLocationUpdates){
+        WiseWalkAndroid.stopWalkLocationUpdates();
+      }
       if(walkWatchId!=null&&'geolocation' in navigator){
         navigator.geolocation.clearWatch(walkWatchId);
         walkWatchId=null;
@@ -515,10 +518,13 @@
 
     function ensureWalkWatcher(){
       if(!walkSession||!walkSession.activeLeg)return;
-      if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
+
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.startWalkLocationUpdates){
+        WiseWalkAndroid.startWalkLocationUpdates();
         startWalkTimer();
         return;
       }
+
       if(!('geolocation' in navigator)){
         routeInfo.textContent='Geolocalització no disponible per controlar l\'arribada.';
         return;
@@ -527,10 +533,6 @@
       walkWatchId=navigator.geolocation.watchPosition(
         pos=>{
           setRouteUserLocation(pos.coords.latitude,pos.coords.longitude);
-          const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
-          if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
-            completeCurrentLegByArrival();
-          }
         },
         ()=>{},
         {enableHighAccuracy:true,timeout:15000,maximumAge:1500}

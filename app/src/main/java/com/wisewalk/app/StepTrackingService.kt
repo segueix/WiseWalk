@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,8 +17,15 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import org.json.JSONObject
 import java.time.LocalDate
 
@@ -42,6 +50,8 @@ class StepTrackingService : Service(), SensorEventListener {
     private var sleepTime: String = "23:00"
 
     private var waterReminderReceiver: BroadcastReceiver? = null
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private var locationCallback: LocationCallback? = null
 
     companion object {
         const val CHANNEL_ID_SERVICE = "wisewalk_tracking"
@@ -54,7 +64,12 @@ class StepTrackingService : Service(), SensorEventListener {
         const val ACTION_STATS_UPDATE = "com.wisewalk.app.STATS_UPDATE"
         const val ACTION_WATER_REMINDER = "com.wisewalk.app.WATER_REMINDER"
         const val ACTION_WATER_DRINK = "com.wisewalk.app.WATER_DRINK"
+        const val ACTION_LOCATION_UPDATE = "com.wisewalk.app.LOCATION_UPDATE"
+        const val ACTION_START_GPS = "com.wisewalk.app.START_GPS"
+        const val ACTION_STOP_GPS = "com.wisewalk.app.STOP_GPS"
         const val EXTRA_STATS_JSON = "stats_json"
+        const val EXTRA_LAT = "lat"
+        const val EXTRA_LNG = "lng"
 
         @Volatile
         var isRunning = false
@@ -63,6 +78,7 @@ class StepTrackingService : Service(), SensorEventListener {
 
     override fun onCreate() {
         super.onCreate()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         createNotificationChannels()
@@ -71,19 +87,34 @@ class StepTrackingService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        isRunning = true
-        resetIfNewDay()
-        loadProfileFromPrefs()
-        
-        startForeground(NOTIF_ID_SERVICE, buildServiceNotification())
-        registerStepListener()
-        scheduleWaterReminders()
-        
+        when (intent?.action) {
+            ACTION_START_GPS -> {
+                if (!isRunning) {
+                    isRunning = true
+                    resetIfNewDay()
+                    loadProfileFromPrefs()
+                    startForeground(NOTIF_ID_SERVICE, buildServiceNotification())
+                    registerStepListener()
+                    scheduleWaterReminders()
+                }
+                startLocationUpdates()
+            }
+            ACTION_STOP_GPS -> stopLocationUpdates()
+            else -> {
+                isRunning = true
+                resetIfNewDay()
+                loadProfileFromPrefs()
+                startForeground(NOTIF_ID_SERVICE, buildServiceNotification())
+                registerStepListener()
+                scheduleWaterReminders()
+            }
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopLocationUpdates()
         isRunning = false
         unregisterStepListener()
         unregisterWaterReceiver()
@@ -98,6 +129,41 @@ class StepTrackingService : Service(), SensorEventListener {
 
     private fun unregisterStepListener() {
         sensorManager.unregisterListener(this)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startLocationUpdates() {
+        if (locationCallback != null) return
+
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+            .setMinUpdateIntervalMillis(2000)
+            .build()
+
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { location ->
+                    val locationIntent = Intent(ACTION_LOCATION_UPDATE).apply {
+                        putExtra(EXTRA_LAT, location.latitude)
+                        putExtra(EXTRA_LNG, location.longitude)
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(locationIntent)
+                }
+            }
+        }
+
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback!!,
+            Looper.getMainLooper()
+        )
+    }
+
+    private fun stopLocationUpdates() {
+        locationCallback?.let {
+            fusedLocationClient.removeLocationUpdates(it)
+            locationCallback = null
+        }
     }
 
     private fun registerWaterReceiver() {
