@@ -77,6 +77,13 @@
     .debug-actions{display:grid;grid-template-columns:1fr;gap:.5rem}
     .debug-btn{margin-top:0;padding:.6rem .75rem;font-size:.82rem;border-radius:10px}
     footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
+    body.map-mode{background:transparent;padding:.5rem}
+    body.map-mode header,
+    body.map-mode #card-calories,
+    body.map-mode footer{display:none}
+    body.map-mode #card-route{background:transparent;box-shadow:none;padding:0;margin:0}
+    body.map-mode .route-container{background:rgba(255,255,255,.90);backdrop-filter:blur(4px)}
+    [data-theme="dark"] body.map-mode .route-container{background:rgba(32,36,36,.82)}
   </style>
 </head>
 <body>
@@ -425,6 +432,10 @@
       btnClaimReturn.style.display=claimReturn?'block':'none';
     }
 
+    function setMapMode(enabled){
+      document.body.classList.toggle('map-mode',!!enabled);
+    }
+
     function setDebugPanelVisibility(visible){
       debugPanelVisible=visible;
       debugPanel.classList.toggle('visible',visible);
@@ -550,6 +561,7 @@
     }
 
     function restoreWalkUi(){
+      setMapMode(!!walkSession);
       if(!walkSession){
         setWalkButtonsVisibility({start:!!currentRoute});
         return;
@@ -716,6 +728,15 @@
       routeInfo.textContent='Geolocalització no disponible';
     }
 
+    function sendRouteToNative(coordinates){
+      if(!Array.isArray(coordinates)||coordinates.length===0)return;
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.drawRoute){
+        try{
+          WiseWalkAndroid.drawRoute(JSON.stringify(coordinates));
+        }catch(_){}
+      }
+    }
+
     async function generateRandomRoute(){
       if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
         WiseWalkAndroid.requestPermissions();
@@ -744,7 +765,12 @@
         currentRoute={start:userLocation,end:routeResult.destination};
         previousDestination=routeResult.destination;
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
+        const geometry=routeResult.data.features[0].geometry;
+        if(geometry&&Array.isArray(geometry.coordinates)){
+          sendRouteToNative(geometry.coordinates);
+        }
         walkSession=null;
+        setMapMode(false);
         saveWalkSession();
         localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
 
@@ -786,6 +812,7 @@
         outboundClaimed:false,
         returnClaimed:false
       };
+      setMapMode(true);
       saveWalkSession();
       localStorage.setItem('wisewalk-last-origin',JSON.stringify(walkSession.origin));
       setWalkButtonsVisibility({});
@@ -822,6 +849,7 @@
       saveWalkSession();
       routeInfo.textContent=`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`;
       walkSession=null;
+      setMapMode(false);
       saveWalkSession();
       stopWalkTimer();
       stopWalkWatcher();
@@ -840,6 +868,7 @@
       previousDestination=simulatedDestination;
       currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
       walkSession=null;
+      setMapMode(false);
       saveWalkSession();
       localStorage.setItem('wisewalk-last-origin',JSON.stringify(simulatedOrigin));
 

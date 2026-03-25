@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
+import android.graphics.Color
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -23,10 +24,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
+import com.google.android.gms.maps.model.PolylineOptions
 import com.wisewalk.app.databinding.ActivityMainBinding
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -39,6 +46,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
+    private var isWalkGpsModeActive: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,6 +61,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         val wv: WebView = binding.webView
 
         wv.webViewClient = WebViewClient()
+        wv.setBackgroundColor(Color.TRANSPARENT)
         
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
@@ -93,8 +102,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 if (intent?.action != StepTrackingService.ACTION_LOCATION_UPDATE) return
                 val lat = intent.getDoubleExtra(StepTrackingService.EXTRA_LAT, 0.0)
                 val lng = intent.getDoubleExtra(StepTrackingService.EXTRA_LNG, 0.0)
+                val bearing = intent.getFloatExtra(StepTrackingService.EXTRA_BEARING, 0f)
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
+                    if (isWalkGpsModeActive) {
+                        animateCameraForWalkMode(lat, lng, bearing)
+                    }
                 }
             }
         }
@@ -194,6 +207,58 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         binding.webView.post {
             binding.webView.evaluateJavascript(js, null)
         }
+    }
+
+    private fun drawRoute(coordinatesJson: String) {
+        val map = mMap ?: return
+        try {
+            val coordinates = JSONArray(coordinatesJson)
+            val points = mutableListOf<LatLng>()
+            val boundsBuilder = LatLngBounds.Builder()
+
+            for (i in 0 until coordinates.length()) {
+                val point = coordinates.optJSONArray(i) ?: continue
+                if (point.length() < 2) continue
+
+                val lng = point.optDouble(0, Double.NaN)
+                val lat = point.optDouble(1, Double.NaN)
+                if (lat.isNaN() || lng.isNaN()) continue
+
+                val latLng = LatLng(lat, lng)
+                points.add(latLng)
+                boundsBuilder.include(latLng)
+            }
+
+            map.clear()
+            if (points.size < 2) {
+                enableMyLocationOnMap()
+                return
+            }
+
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(points)
+                    .color(Color.parseColor("#2E7D32"))
+                    .width(12f)
+            )
+
+            val paddingPx = (resources.displayMetrics.density * 72).toInt()
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), paddingPx))
+            enableMyLocationOnMap()
+        } catch (_: Throwable) {
+            // Ignore malformed route payloads from JS bridge.
+        }
+    }
+
+    private fun animateCameraForWalkMode(lat: Double, lng: Double, bearing: Float) {
+        val map = mMap ?: return
+        val cameraPosition = CameraPosition.Builder()
+            .target(LatLng(lat, lng))
+            .zoom(18f)
+            .tilt(45f)
+            .bearing(bearing)
+            .build()
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -343,6 +408,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         @JavascriptInterface
         fun startWalkLocationUpdates() {
             activity.runOnUiThread {
+                activity.isWalkGpsModeActive = true
                 val intent = Intent(activity, StepTrackingService::class.java).apply {
                     action = StepTrackingService.ACTION_START_GPS
                 }
@@ -357,11 +423,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         @JavascriptInterface
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
+                activity.isWalkGpsModeActive = false
                 val intent = Intent(activity, StepTrackingService::class.java).apply {
                     action = StepTrackingService.ACTION_STOP_GPS
                 }
                 activity.startService(intent)
             }
+        }
+
+        @JavascriptInterface
+        fun drawRoute(coordinatesJson: String) {
+            activity.runOnUiThread { activity.drawRoute(coordinatesJson) }
         }
 
     }
