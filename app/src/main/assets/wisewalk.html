@@ -235,16 +235,6 @@
               <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener noreferrer">Crea-la aquí</a>.
             </small>
           </div>
-          <div class="form-group">
-            <label for="google-maps-key-config">Clau API de Google Maps</label>
-            <div class="input-wrapper">
-              <input type="password" id="google-maps-key-config" placeholder="Ex: AIzaSy..." autocomplete="off">
-            </div>
-            <small style="display:block;margin-top:.45rem;color:var(--text-soft)">
-              Necessària per veure el mapa natiu amb la ruta.
-              <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Crea-la aquí</a>.
-            </small>
-          </div>
           <button type="submit" class="btn">Desar canvis</button>
         </form>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back">← Tornar</button>
@@ -342,7 +332,6 @@
     function loadConfigForm(){
       const profile=loadProfile();
       document.getElementById('api-key-config').value=sanitizeApiKey(localStorage.getItem('wisewalk-ors-apikey'));
-      document.getElementById('google-maps-key-config').value=sanitizeApiKey(localStorage.getItem('wisewalk-gmaps-apikey'));
       if(!profile)return;
       document.getElementById('age-config').value=profile.ageYears;
       document.getElementById('height-config').value=profile.heightCm;
@@ -961,11 +950,6 @@
       if(prefix==='config'){
         const apiKey=sanitizeApiKey(document.getElementById('api-key-config').value);
         localStorage.setItem('wisewalk-ors-apikey',apiKey);
-        const gmapsKey=sanitizeApiKey(document.getElementById('google-maps-key-config').value);
-        localStorage.setItem('wisewalk-gmaps-apikey',gmapsKey);
-        if(window.WiseWalkAndroid&&WiseWalkAndroid.setGoogleMapsApiKey){
-          WiseWalkAndroid.setGoogleMapsApiKey(gmapsKey);
-        }
       }
       saveProfile({
         sex,
