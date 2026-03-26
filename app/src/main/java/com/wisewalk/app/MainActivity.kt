@@ -17,6 +17,7 @@ import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
+import android.view.View
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
@@ -54,15 +55,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        applyGoogleMapsApiKey()
         initMapFragment()
-        
+        // Hide map by default; shown when entering map-mode via JS bridge
+        supportFragmentManager.findFragmentById(R.id.mapFragment)?.view?.visibility = View.GONE
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         val wv: WebView = binding.webView
 
         wv.webViewClient = WebViewClient()
         wv.setBackgroundColor(Color.TRANSPARENT)
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
@@ -143,16 +146,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun applyGoogleMapsApiKey() {
-        val savedKey = prefs.getString("google_maps_api_key", null)
-        if (!savedKey.isNullOrBlank()) {
-            try {
-                val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                appInfo.metaData.putString("com.google.android.geo.API_KEY", savedKey)
-            } catch (_: Exception) {}
-        }
     }
 
     private fun initMapFragment() {
@@ -448,10 +441,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         }
 
         @JavascriptInterface
-        fun setGoogleMapsApiKey(apiKey: String) {
-            activity.prefs.edit().putString("google_maps_api_key", apiKey.trim()).apply()
-            activity.runOnUiThread { activity.applyGoogleMapsApiKey() }
+        fun setMapModeNative(enabled: Boolean) {
+            activity.runOnUiThread {
+                val mapFragment = activity.supportFragmentManager.findFragmentById(R.id.mapFragment)
+                if (enabled) {
+                    mapFragment?.view?.visibility = View.VISIBLE
+                } else {
+                    mapFragment?.view?.visibility = View.GONE
+                }
+            }
         }
+
 
     }
 }
