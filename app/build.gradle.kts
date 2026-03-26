@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// 1. AFEGIM AIXÒ AQUÍ: LLEGIM LA CLAU DE GITHUB SECRETS
+val mapsApiKey: String = System.getenv("MAPS_API_KEY") ?: "CLAU_BUIDA"
+
 android {
     namespace = "com.wisewalk.app"
     compileSdk = 34
@@ -13,6 +16,9 @@ android {
         targetSdk = 34
         versionCode = 11
         versionName = "2.0"
+        
+        // 2. AFEGIM AIXÒ AQUÍ: INJECTEM LA CLAU A L'ANDROID MANIFEST
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {
