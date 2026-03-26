@@ -15,7 +15,19 @@ android {
         versionName = "2.0"
     }
 
+    signingConfigs {
+        create("customDebug") {
+            storeFile = file("wisewalk-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("customDebug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
