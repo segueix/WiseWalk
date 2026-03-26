@@ -3,8 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// 1. AFEGIM AIXÒ AQUÍ: LLEGIM LA CLAU DE GITHUB SECRETS
-val mapsApiKey: String = System.getenv("MAPS_API_KEY") ?: "CLAU_BUIDA"
+val mapsApiKey: String = System.getenv("MAPS_API_KEY")?.takeIf { it.isNotBlank() } ?: "CLAU_BUIDA"
+if (mapsApiKey == "CLAU_BUIDA") {
+    logger.warn("WARNING: MAPS_API_KEY not set — Google Maps will not render tiles.")
+}
 
 android {
     namespace = "com.wisewalk.app"
