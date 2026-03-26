@@ -77,7 +77,8 @@
     .debug-actions{display:grid;grid-template-columns:1fr;gap:.5rem}
     .debug-btn{margin-top:0;padding:.6rem .75rem;font-size:.82rem;border-radius:10px}
     footer{text-align:center;margin-top:1.5rem;color:var(--text-soft);font-size:.75rem}
-    body.map-mode{background:transparent;padding:.5rem}
+    html.map-mode,html.map-mode body{background:transparent!important}
+    body.map-mode{padding:.5rem}
     body.map-mode header,
     body.map-mode #card-calories,
     body.map-mode footer{display:none}
@@ -456,7 +457,11 @@
     }
 
     function setMapMode(enabled){
+      document.documentElement.classList.toggle('map-mode',!!enabled);
       document.body.classList.toggle('map-mode',!!enabled);
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.setMapModeNative){
+        try{WiseWalkAndroid.setMapModeNative(!!enabled);}catch(_){}
+      }
     }
 
     function exitMapMode(){
