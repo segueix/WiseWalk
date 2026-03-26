@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.graphics.Color
+import android.util.Log
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -56,8 +57,6 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         initMapFragment()
-        // Hide map by default; shown when entering map-mode via JS bridge
-        supportFragmentManager.findFragmentById(R.id.mapFragment)?.view?.visibility = View.GONE
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -156,6 +155,21 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
         enableMyLocationOnMap()
+        // Hide map fragment by default; setMapModeNative(true) will show it
+        supportFragmentManager.findFragmentById(R.id.mapFragment)?.view?.visibility = View.GONE
+
+        // Validate API key from manifest
+        try {
+            val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+            val key = appInfo.metaData?.getString("com.google.android.geo.API_KEY") ?: ""
+            if (key.isBlank() || key == "CLAU_BUIDA") {
+                Log.e("WiseWalk", "Google Maps API key is missing or invalid: '$key'")
+            } else {
+                Log.d("WiseWalk", "Google Maps API key is configured (${key.take(8)}...)")
+            }
+        } catch (e: Exception) {
+            Log.e("WiseWalk", "Could not read API key from manifest", e)
+        }
     }
 
     @SuppressLint("MissingPermission")
