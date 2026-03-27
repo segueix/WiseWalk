@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
@@ -19,6 +20,8 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.view.View
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
@@ -28,6 +31,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
 import com.wisewalk.app.databinding.ActivityMainBinding
 import org.json.JSONArray
+import java.io.File
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -173,12 +177,12 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     fun getCurrentLocation() {
-        if (!hasLocationPermission()) {
-            requestLocationPermission()
-            return
-        }
-
         try {
+            if (!hasLocationPermission()) {
+                requestLocationPermission()
+                return
+            }
+
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
                 .setWaitForAccurateLocation(true)
                 .setMinUpdateIntervalMillis(500)
@@ -204,8 +208,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: SecurityException) {
-            Log.w("WiseWalk", "Location permission revoked during request", e)
+            Log.e("WiseWalk", "Error de permisos obtenint la localització (SecurityException)", e)
             requestLocationPermission()
+        } catch (e: IllegalStateException) {
+            Log.e("WiseWalk", "Possible problema de hardware GPS/servei de localització no disponible", e)
+        } catch (e: Exception) {
+            Log.e("WiseWalk", "Error inesperat obtenint la localització (permisos o hardware GPS)", e)
         }
     }
 
@@ -454,6 +462,49 @@ class MainActivity : AppCompatActivity() {
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
+            }
+        }
+
+        @JavascriptInterface
+        fun logError(message: String) {
+            Log.e("WiseWalkJS", message)
+            if (message.contains("Error", ignoreCase = true)) {
+                activity.runOnUiThread {
+                    Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun exportDebugLog(content: String) {
+            activity.runOnUiThread {
+                try {
+                    val logsDir = File(activity.cacheDir, "logs").apply { mkdirs() }
+                    val file = File(logsDir, "wisewalk-debug-${System.currentTimeMillis()}.txt")
+                    file.writeText(content)
+
+                    val uri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        file
+                    )
+
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "WiseWalk debug logs")
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+
+                    activity.startActivity(Intent.createChooser(shareIntent, "Compartir logs de depuració"))
+                    Toast.makeText(activity, "Fitxer de logs preparat per compartir", Toast.LENGTH_SHORT).show()
+                } catch (e: ActivityNotFoundException) {
+                    Log.e("WiseWalk", "No hi ha cap app per compartir el fitxer de logs", e)
+                    Toast.makeText(activity, "No hi ha cap app per compartir logs", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e("WiseWalk", "No s'ha pogut exportar el fitxer de logs", e)
+                    Toast.makeText(activity, "Error exportant logs", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
