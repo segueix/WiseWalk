@@ -606,57 +606,13 @@
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.2;
 
-    async function fetchRouteWithOrs(start,end){
-      const requestBody={
-        coordinates:[
-          [start.lng,start.lat],
-          [end.lng,end.lat]
-        ],
-        elevation:true,
-        options:{
-          avoid_features:['steps','ferries','fords']
-        }
-      };
-      const params=new URLSearchParams({
-        format:'geojson'
-      });
-      const response=await fetch(`https://api.openrouteservice.org/v2/directions/foot-walking/geojson?${params.toString()}`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(requestBody)
-      });
+    async function fetchRouteWithOsrm(start,end){
+      const url=`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+      const response=await fetch(url);
       if(!response.ok){
-        const errorBody=await response.text();
-        throw new Error(formatOrsError(response.status,errorBody));
+        throw new Error(`OSRM error ${response.status}: no s'ha pogut calcular la ruta.`);
       }
       return response.json();
-    }
-
-    function formatOrsError(status,errorBody){
-      let parsed=null;
-      try{
-        parsed=errorBody?JSON.parse(errorBody):null;
-      }catch(_){}
-
-      const serverMessage=
-        (parsed&&parsed.error&&parsed.error.message)||
-        (parsed&&parsed.message)||
-        (errorBody&&errorBody.trim())||
-        'Sense detall del servidor';
-
-      if(status===401){
-        return `ORS 401: Clau API no vàlida o no enviada. Detall: ${serverMessage}`;
-      }
-      if(status===403){
-        return `ORS 403: Accés denegat (clau incorrecta/restringida, quota límit o origen bloquejat). Detall: ${serverMessage}`;
-      }
-      if(status===429){
-        return `ORS 429: Massa peticions o quota diària superada. Detall: ${serverMessage}`;
-      }
-      if(status>=500){
-        return `ORS ${status}: Error temporal del servei. Detall: ${serverMessage}`;
-      }
-      return `ORS ${status}: ${serverMessage}`;
     }
 
     async function generateRouteFromLocation(start){
@@ -674,7 +630,7 @@
           if(distFromPrev<90)continue;
         }
 
-        const data=await fetchRouteWithOrs(start,destination);
+        const data=await fetchRouteWithOsrm(start,destination);
         if(!data.features||data.features.length===0)continue;
 
         const summary=data.features[0].properties&&data.features[0].properties.summary?data.features[0].properties.summary:null;
