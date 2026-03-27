@@ -644,13 +644,37 @@
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.4;
 
+    const OSRM_ROUTE_ENDPOINTS=[
+      'https://router.project-osrm.org/route/v1/foot',
+      'https://routing.openstreetmap.de/routed-foot/route/v1/driving'
+    ];
+    const ROUTE_REQUEST_TIMEOUT_MS=12000;
+
     async function fetchRouteWithOsrm(start,end){
-      const url=`https://router.project-osrm.org/route/v1/foot/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
-      const response=await fetch(url);
-      if(!response.ok){
-        throw new Error(`OSRM error ${response.status}: no s'ha pogut calcular la ruta.`);
+      let lastError=null;
+      for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
+        const controller=new AbortController();
+        const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
+        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+        try{
+          const response=await fetch(url,{signal:controller.signal});
+          if(!response.ok){
+            throw new Error(`OSRM ${response.status}`);
+          }
+          const data=await response.json();
+          if(data&&Array.isArray(data.routes)&&data.routes.length){
+            return data;
+          }
+          throw new Error('Resposta de rutes buida');
+        }catch(err){
+          lastError=err;
+        }finally{
+          clearTimeout(timeoutId);
+        }
       }
-      return response.json();
+      throw new Error(lastError&&lastError.name==='AbortError'
+        ?'Temps d\'espera excedit connectant amb OpenStreetMap. Torna-ho a provar.'
+        :'No s\'ha pogut calcular la ruta amb els serveis d\'OpenStreetMap.');
     }
 
     async function fetchElevationGain(coordinates){
@@ -678,6 +702,7 @@
       let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
       let chosenData=null;
       let chosenDestination=null;
+      let lastRouteError=null;
 
       for(let attempt=0;attempt<15;attempt++){
         const destination=calculateRandomDestination(start,targetDistanceMeters);
@@ -689,7 +714,13 @@
           if(distFromPrev<90)continue;
         }
 
-        const data=await fetchRouteWithOsrm(start,destination);
+        let data;
+        try{
+          data=await fetchRouteWithOsrm(start,destination);
+        }catch(err){
+          lastRouteError=err;
+          continue;
+        }
         if(!data.routes||data.routes.length===0)continue;
 
         const route=data.routes[0];
@@ -713,6 +744,9 @@
       }
 
       if(!chosenData||!chosenDestination){
+        if(lastRouteError){
+          throw new Error(lastRouteError.message||'No s\'ha pogut contactar amb OpenStreetMap per generar la ruta.');
+        }
         throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat');
       }
       return {data:chosenData,destination:chosenDestination};
