@@ -171,6 +171,15 @@
            </div>
         </div>
       </section>
+      <section class="card" id="card-activity">
+        <div class="result-header">
+          <div class="result-icon">🏅</div>
+          <div>
+            <div class="result-title">Registre acumulat</div>
+            <div class="result-subtitle" id="activity-totals">0 km caminats · 0 kcal cremades · 0 caminades</div>
+          </div>
+        </div>
+      </section>
       <section class="card" id="card-route">
         <div class="result-header"><div class="result-icon">🧭</div><div><div class="result-title">Ruta aleatòria</div><div class="result-subtitle">Descobreix nous camins a 1,5 km (3,0 km totals)</div></div></div>
         <div class="route-container">
@@ -463,6 +472,35 @@
       history[today]=(history[today]||0)+Math.round(kcal);
       localStorage.setItem('wisewalk-kcal-history',JSON.stringify(history));
       updateCalorieGoals();
+    }
+
+    function getActivityLog(){
+      return JSON.parse(localStorage.getItem('wisewalk-activity-log')||'[]');
+    }
+
+    function addActivityEntry(distanceKm,kcal){
+      const log=getActivityLog();
+      log.push({
+        date:getTodayIsoDate(),
+        ts:Date.now(),
+        distanceKm:Math.round(distanceKm*100)/100,
+        kcal:Math.round(kcal)
+      });
+      localStorage.setItem('wisewalk-activity-log',JSON.stringify(log));
+      updateActivityTotals();
+    }
+
+    function getActivityTotals(){
+      const log=getActivityLog();
+      let totalKm=0,totalKcal=0,walks=0;
+      log.forEach(e=>{totalKm+=e.distanceKm;totalKcal+=e.kcal;walks++;});
+      return {totalKm:Math.round(totalKm*100)/100,totalKcal:Math.round(totalKcal),walks};
+    }
+
+    function updateActivityTotals(){
+      const totals=getActivityTotals();
+      const el=document.getElementById('activity-totals');
+      if(el)el.innerHTML=`${formatDecimal(totals.totalKm.toFixed(1))} km caminats · ${totals.totalKcal.toLocaleString('ca')} kcal cremades · ${totals.walks} caminades`;
     }
 
     function getLegData(leg){
@@ -798,7 +836,9 @@
     function claimOutboundReward(){
       if(!walkSession||walkSession.outboundElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
+      const legKm=currentRouteMetrics?currentRouteMetrics.distanceKm/2:0;
       addBurnedCaloriesToToday(burnedKcal);
+      addActivityEntry(legKm,burnedKcal);
       walkSession.outboundClaimed=true;
       saveWalkSession();
       setWalkButtonsVisibility({returnOrigin:true});
@@ -820,7 +860,9 @@
     function claimReturnReward(){
       if(!walkSession||walkSession.returnElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('return',walkSession.returnElapsedSeconds);
+      const legKm=currentRouteMetrics?currentRouteMetrics.distanceKm/2:0;
       addBurnedCaloriesToToday(burnedKcal);
+      addActivityEntry(legKm,burnedKcal);
       walkSession.returnClaimed=true;
       saveWalkSession();
       setRouteInfoText(`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`);
@@ -1016,6 +1058,7 @@
     updateConfigSummary();
     if(loadProfile()){
       updateCalorieGoals();
+      updateActivityTotals();
       showScreen('main');
       restoreWalkUi();
     }else{
