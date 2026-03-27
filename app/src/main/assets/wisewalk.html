@@ -293,6 +293,7 @@
     let walkSession=null;
     let walkWatchId=null;
     let walkTimerId=null;
+    let pendingRouteGeneration=false;
     const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
     const ARRIVAL_THRESHOLD_M=35;
 
@@ -775,13 +776,21 @@
       }catch(_){return 0;}
     }
 
+    const MAX_ROUTE_ATTEMPTS=8;
+    const GLOBAL_ROUTE_TIMEOUT_MS=30000;
+
     async function generateRouteFromLocation(start){
       let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
       let chosenData=null;
       let chosenDestination=null;
       let lastRouteError=null;
+      const globalDeadline=Date.now()+GLOBAL_ROUTE_TIMEOUT_MS;
 
-      for(let attempt=0;attempt<15;attempt++){
+      for(let attempt=0;attempt<MAX_ROUTE_ATTEMPTS;attempt++){
+        if(Date.now()>=globalDeadline){
+          debugLog(`generateRouteFromLocation: timeout global de ${GLOBAL_ROUTE_TIMEOUT_MS/1000}s excedit`);
+          break;
+        }
         const destination=calculateRandomDestination(start,targetDistanceMeters);
         if(previousDestination){
           const distFromPrev=haversineDistance(
@@ -793,10 +802,10 @@
 
         let data;
         try{
+          debugLog(`Intent ${attempt+1}/${MAX_ROUTE_ATTEMPTS}: distància objectiu ${Math.round(targetDistanceMeters)}m`);
           data=await fetchRouteWithOsrm(start,destination);
         }catch(err){
-          debugLog('Error a generateRouteFromLocation');
-          debugLog((err&&err.stack)||err);
+          debugLog(`Intent ${attempt+1} fallit: ${(err&&err.message)||err}`);
           lastRouteError=err;
           continue;
         }
@@ -806,6 +815,7 @@
         if(typeof route.distance!=='number')continue;
 
         const totalDistanceKm=(route.distance*2)/1000;
+        debugLog(`Intent ${attempt+1}: distància total ${totalDistanceKm.toFixed(2)} km (objectiu ${TARGET_TOTAL_DISTANCE_KM} ±${DISTANCE_TOLERANCE_KM})`);
         if(Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM)<=DISTANCE_TOLERANCE_KM){
           const geometry=route.geometry;
           const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
@@ -814,6 +824,7 @@
           if(!snappedEndCoords||snappedEndCoords.length<2)continue;
           chosenData=data;
           chosenDestination={lat:snappedEndCoords[1],lng:snappedEndCoords[0]};
+          debugLog(`Ruta trobada a l'intent ${attempt+1}: ${totalDistanceKm.toFixed(2)} km`);
           break;
         }
 
@@ -826,7 +837,7 @@
         if(lastRouteError){
           throw new Error(lastRouteError.message||'No s\'ha pogut contactar amb OpenStreetMap per generar la ruta.');
         }
-        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat');
+        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat. Torna-ho a provar.');
       }
       return {data:chosenData,destination:chosenDestination};
     }
@@ -842,11 +853,19 @@
         renderActiveWalkStatus();
         return;
       }
+      if(pendingRouteGeneration){
+        pendingRouteGeneration=false;
+        generateRandomRoute();
+        return;
+      }
       setRouteInfoText('Ubicació obtinguda! Genera una ruta.');
     }
 
     function getLocation(){
       setRouteInfoText('Obtenint ubicació...');
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
+        WiseWalkAndroid.requestPermissions();
+      }
       if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
         WiseWalkAndroid.getLocation();
         return;
@@ -863,19 +882,27 @@
     }
 
     function sendRouteToNative(coordinates){
-      if(!Array.isArray(coordinates)||coordinates.length===0)return;
+      if(!Array.isArray(coordinates)||coordinates.length===0){
+        debugLog('sendRouteToNative: coordenades buides o invàlides');
+        return;
+      }
+      debugLog(`sendRouteToNative: enviant ${coordinates.length} punts al mapa natiu`);
       if(window.WiseWalkAndroid&&WiseWalkAndroid.drawRoute){
         try{
           WiseWalkAndroid.drawRoute(JSON.stringify(coordinates));
-        }catch(_){}
+          debugLog('sendRouteToNative: drawRoute cridat correctament');
+        }catch(err){
+          debugLog(`sendRouteToNative: error cridant drawRoute: ${(err&&err.message)||err}`);
+        }
+      }else{
+        debugLog('sendRouteToNative: bridge WiseWalkAndroid.drawRoute no disponible');
       }
     }
 
     async function generateRandomRoute(){
-      if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
-        WiseWalkAndroid.requestPermissions();
-      }
       if(!userLocation){
+        pendingRouteGeneration=true;
+        setRouteInfoText('Obtenint ubicació per generar la ruta...');
         getLocation();
         return;
       }
@@ -896,9 +923,9 @@
         const geometry=route.geometry;
         if(geometry&&Array.isArray(geometry.coordinates)){
           sendRouteToNative(geometry.coordinates);
+          setMapMode(true);
         }
         walkSession=null;
-        setMapMode(false);
         saveWalkSession();
         localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
 
