@@ -141,7 +141,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        locationReceiver?.let { unregisterReceiver(it) }
+        locationReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w("WiseWalk", "Location receiver was already unregistered", e)
+            }
+        }
         locationReceiver = null
         super.onDestroy()
     }
