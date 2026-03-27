@@ -3,11 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val mapsApiKey: String = System.getenv("MAPS_API_KEY")?.takeIf { it.isNotBlank() } ?: "CLAU_BUIDA"
-if (mapsApiKey == "CLAU_BUIDA") {
-    logger.warn("WARNING: MAPS_API_KEY not set — Google Maps will not render tiles.")
-}
-
 android {
     namespace = "com.wisewalk.app"
     compileSdk = 34
@@ -18,9 +13,6 @@ android {
         targetSdk = 34
         versionCode = 11
         versionName = "2.0"
-        
-        // 2. AFEGIM AIXÒ AQUÍ: INJECTEM LA CLAU A L'ANDROID MANIFEST
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     signingConfigs {
@@ -57,6 +49,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
     implementation("com.google.android.gms:play-services-location:21.1.0")
 }
