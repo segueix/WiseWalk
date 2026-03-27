@@ -250,6 +250,7 @@
       <button class="btn btn-secondary debug-btn" id="btn-debug-simulate">🧪 Simular Ubicació i Ruta</button>
       <button class="btn btn-secondary debug-btn" id="btn-debug-destination">📍 Saltar al Destí</button>
       <button class="btn btn-secondary debug-btn" id="btn-debug-origin">↩️ Saltar a l'Origen</button>
+      <button class="btn btn-secondary debug-btn" id="btn-debug-export">⬇️ Exportar logs</button>
     </div>
     <div id="debug-console" class="debug-console" aria-live="polite"></div>
   </div>
@@ -278,6 +279,7 @@
     const btnDebugSimulate=document.getElementById('btn-debug-simulate');
     const btnDebugDestination=document.getElementById('btn-debug-destination');
     const btnDebugOrigin=document.getElementById('btn-debug-origin');
+    const btnDebugExport=document.getElementById('btn-debug-export');
     const appTitle=document.querySelector('h1');
     const html=document.documentElement;
     const metaTheme=document.querySelector('meta[name="theme-color"]');
@@ -309,6 +311,41 @@
       if(debugConsole){
         debugConsole.innerHTML=debugEntries.map(entry=>`<div class="debug-console-entry">${entry.replace(/</g,'&lt;')}</div>`).join('');
         debugConsole.scrollTop=debugConsole.scrollHeight;
+      }
+    }
+    window.debugLog=debugLog;
+
+    function exportDebugLogs(){
+      const content=[
+        'WiseWalk debug log export',
+        `Generated: ${new Date().toISOString()}`,
+        '',
+        ...debugEntries
+      ].join('\n');
+
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.exportDebugLog){
+        try{
+          WiseWalkAndroid.exportDebugLog(content);
+          debugLog('Export de logs enviat a Android.');
+          return;
+        }catch(err){
+          debugLog(`Error exportant via Android bridge: ${(err&&err.stack)||err}`);
+        }
+      }
+
+      try{
+        const blob=new Blob([content],{type:'text/plain;charset=utf-8'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`wisewalk-debug-${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        debugLog('Export de logs en mode web completat.');
+      }catch(err){
+        debugLog(`Error exportant logs (fallback web): ${(err&&err.stack)||err}`);
       }
     }
 
@@ -692,7 +729,8 @@
           }
           throw new Error('Resposta de rutes buida');
         }catch(err){
-          debugLog(`Error a fetchRouteWithOsrm: ${(err&&err.stack)||err}`);
+          debugLog('Error a fetchRouteWithOsrm');
+          debugLog((err&&err.stack)||err);
           lastError=err;
         }finally{
           clearTimeout(timeoutId);
@@ -744,7 +782,8 @@
         try{
           data=await fetchRouteWithOsrm(start,destination);
         }catch(err){
-          debugLog(`Error a generateRouteFromLocation: ${(err&&err.stack)||err}`);
+          debugLog('Error a generateRouteFromLocation');
+          debugLog((err&&err.stack)||err);
           lastRouteError=err;
           continue;
         }
@@ -859,7 +898,8 @@
         setWalkButtonsVisibility({start:true});
         setRouteInfoText('Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.');
       }catch(err){
-        debugLog(`Error a generateRandomRoute: ${(err&&err.stack)||err}`);
+        debugLog('Error a generateRandomRoute');
+        debugLog((err&&err.stack)||err);
         setRouteInfoText(err.message||'Error en generar la ruta.');
       }finally{
         btnGenerateRoute.disabled=false;
@@ -936,6 +976,28 @@
       setWalkButtonsVisibility({start:!!currentRoute});
     }
 
+    function buildSimulatedRouteCoordinates(origin,destination){
+      const coords=[];
+      const stepsPerLeg=18;
+      const curveOffset=0.0009;
+
+      for(let i=0;i<=stepsPerLeg;i++){
+        const t=i/stepsPerLeg;
+        const lat=origin.lat+((destination.lat-origin.lat)*t)+(Math.sin(t*Math.PI)*curveOffset);
+        const lng=origin.lng+((destination.lng-origin.lng)*t);
+        coords.push([lng,lat]);
+      }
+
+      for(let i=1;i<=stepsPerLeg;i++){
+        const t=i/stepsPerLeg;
+        const lat=destination.lat+((origin.lat-destination.lat)*t)-(Math.sin(t*Math.PI)*curveOffset);
+        const lng=destination.lng+((origin.lng-destination.lng)*t);
+        coords.push([lng,lat]);
+      }
+
+      return coords;
+    }
+
     function simulateRouteAndLocation(){
       const simulatedOrigin={lat:41.3874,lng:2.1686};
       const simulatedDestination=calculateRandomDestination(simulatedOrigin,TARGET_OUTBOUND_DISTANCE_M);
@@ -951,6 +1013,7 @@
       setMapMode(false);
       saveWalkSession();
       localStorage.setItem('wisewalk-last-origin',JSON.stringify(simulatedOrigin));
+      sendRouteToNative(buildSimulatedRouteCoordinates(simulatedOrigin,simulatedDestination));
 
       document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
       document.getElementById('route-elevation').textContent=`+${Math.round(totalPositiveGainM)} m`;
@@ -967,16 +1030,28 @@
         setRouteInfoText('[DEBUG] Simula una ruta abans de saltar al destí.');
         return;
       }
-      if(!walkSession||walkSession.activeLeg!=='outbound'){
-        startOutboundWalk();
+      if(!walkSession){
+        walkSession={
+          origin:{lat:currentRoute.start.lat,lng:currentRoute.start.lng},
+          destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
+          activeLeg:'outbound',
+          startedAt:Date.now(),
+          outboundElapsedSeconds:null,
+          returnElapsedSeconds:null,
+          outboundClaimed:false,
+          returnClaimed:false
+        };
       }
-      if(!walkSession||!walkSession.destination){
+      if(!walkSession.destination){
         setRouteInfoText('[DEBUG] No s\'ha pogut iniciar el tram d\'anada.');
         return;
       }
+      stopWalkTimer();
       stopWalkWatcher();
+      setMapMode(false);
       setRouteUserLocation(walkSession.destination.lat,walkSession.destination.lng);
-      ensureWalkWatcher();
+      setMapMode(false);
+      saveWalkSession();
     }
 
     function jumpToOrigin(){
@@ -992,11 +1067,15 @@
         claimOutboundReward();
       }
       if(walkSession.activeLeg!=='return'){
-        startReturnWalk();
+        walkSession.activeLeg='return';
+        walkSession.startedAt=Date.now();
       }
+      stopWalkTimer();
       stopWalkWatcher();
+      setMapMode(false);
       setRouteUserLocation(walkSession.origin.lat,walkSession.origin.lng);
-      ensureWalkWatcher();
+      setMapMode(false);
+      saveWalkSession();
     }
 
     function saveProfileFromForm(prefix){
@@ -1106,6 +1185,7 @@
     btnDebugSimulate.addEventListener('click',simulateRouteAndLocation);
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
+    btnDebugExport.addEventListener('click',exportDebugLogs);
     appTitle.addEventListener('dblclick',()=>{setDebugPanelVisibility(!debugPanelVisible);debugLog(`Panell debug ${debugPanelVisible?'obert':'tancat'}`);});
     themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
     document.getElementById('color-selector').addEventListener('click',e=>{

@@ -9,8 +9,10 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.Bundle
+import java.io.File
 import android.os.Looper
 import android.graphics.Color
 import android.util.Log
@@ -439,6 +441,7 @@ class MainActivity : AppCompatActivity() {
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
+                activity.mapView.mapOrientation = 0f
                 try {
                     val intent = Intent(activity, StepTrackingService::class.java).apply {
                         action = StepTrackingService.ACTION_STOP_GPS
@@ -459,6 +462,9 @@ class MainActivity : AppCompatActivity() {
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
+                if (!enabled) {
+                    activity.mapView.mapOrientation = 0f
+                }
             }
         }
 
@@ -468,6 +474,41 @@ class MainActivity : AppCompatActivity() {
             if (message.contains("Error", ignoreCase = true)) {
                 activity.runOnUiThread {
                     Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun exportDebugLog(content: String) {
+            activity.runOnUiThread {
+                try {
+                    val logsDir = File(activity.cacheDir, "logs")
+                    if (!logsDir.exists() && !logsDir.mkdirs()) {
+                        throw IllegalStateException("No s'ha pogut crear cacheDir/logs")
+                    }
+
+                    val fileName = "wisewalk-debug-${System.currentTimeMillis()}.txt"
+                    val logFile = File(logsDir, fileName)
+                    logFile.writeText(content)
+
+                    val uri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        logFile
+                    )
+
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "WiseWalk debug log")
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+
+                    activity.startActivity(Intent.createChooser(shareIntent, "Compartir log de depuració"))
+                    Toast.makeText(activity, "Log exportat correctament", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e("WiseWalk", "Error exportant debug log", e)
+                    Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
                 }
             }
         }
