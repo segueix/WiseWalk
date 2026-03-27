@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
+    private var pendingLocationRequest: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -180,7 +181,8 @@ class MainActivity : AppCompatActivity() {
     fun getCurrentLocation() {
         try {
             if (!hasLocationPermission()) {
-                requestLocationPermission()
+                pendingLocationRequest = true
+                Log.d("WiseWalk", "getCurrentLocation: permís no concedit, esperant callback de permisos")
                 return
             }
 
@@ -327,6 +329,10 @@ class MainActivity : AppCompatActivity() {
                 val js = "window.wiseWalkOnPermissionUpdate && window.wiseWalkOnPermissionUpdate($s);"
                 binding.webView.post { binding.webView.evaluateJavascript(js, null) }
 
+                if (pendingLocationRequest && hasLocationPermission()) {
+                    pendingLocationRequest = false
+                    getCurrentLocation()
+                }
             }
             LOCATION_PERMISSION_REQUEST -> {
                 val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
