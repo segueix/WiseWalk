@@ -228,6 +228,7 @@ class MainActivity : AppCompatActivity() {
     private fun drawRoute(coordinatesJson: String) {
         try {
             val coordinates = JSONArray(coordinatesJson)
+            Log.d("WiseWalk", "drawRoute: rebudes ${coordinates.length()} coordenades")
             val points = mutableListOf<GeoPoint>()
 
             for (i in 0 until coordinates.length()) {
@@ -242,7 +243,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             mapView.overlays.clear()
-            if (points.size < 2) return
+            if (points.size < 2) {
+                Log.w("WiseWalk", "drawRoute: només ${points.size} punts vàlids, cal mínim 2")
+                return
+            }
 
             val polyline = Polyline().apply {
                 setPoints(points)
@@ -254,8 +258,9 @@ class MainActivity : AppCompatActivity() {
             val boundingBox = BoundingBox.fromGeoPoints(points)
             mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
             mapView.invalidate()
-        } catch (_: Throwable) {
-            // Ignore malformed route payloads from JS bridge.
+            Log.d("WiseWalk", "drawRoute: ruta dibuixada amb ${points.size} punts")
+        } catch (e: Throwable) {
+            Log.e("WiseWalk", "drawRoute: error processant coordenades de ruta", e)
         }
     }
 

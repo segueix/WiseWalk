@@ -293,6 +293,7 @@
     let walkSession=null;
     let walkWatchId=null;
     let walkTimerId=null;
+    let pendingRouteGeneration=false;
     const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
     const ARRIVAL_THRESHOLD_M=35;
 
@@ -842,6 +843,11 @@
         renderActiveWalkStatus();
         return;
       }
+      if(pendingRouteGeneration){
+        pendingRouteGeneration=false;
+        generateRandomRoute();
+        return;
+      }
       setRouteInfoText('Ubicació obtinguda! Genera una ruta.');
     }
 
@@ -863,11 +869,20 @@
     }
 
     function sendRouteToNative(coordinates){
-      if(!Array.isArray(coordinates)||coordinates.length===0)return;
+      if(!Array.isArray(coordinates)||coordinates.length===0){
+        debugLog('sendRouteToNative: coordenades buides o invàlides');
+        return;
+      }
+      debugLog(`sendRouteToNative: enviant ${coordinates.length} punts al mapa natiu`);
       if(window.WiseWalkAndroid&&WiseWalkAndroid.drawRoute){
         try{
           WiseWalkAndroid.drawRoute(JSON.stringify(coordinates));
-        }catch(_){}
+          debugLog('sendRouteToNative: drawRoute cridat correctament');
+        }catch(err){
+          debugLog(`sendRouteToNative: error cridant drawRoute: ${(err&&err.message)||err}`);
+        }
+      }else{
+        debugLog('sendRouteToNative: bridge WiseWalkAndroid.drawRoute no disponible');
       }
     }
 
@@ -876,6 +891,8 @@
         WiseWalkAndroid.requestPermissions();
       }
       if(!userLocation){
+        pendingRouteGeneration=true;
+        setRouteInfoText('Obtenint ubicació per generar la ruta...');
         getLocation();
         return;
       }
@@ -896,9 +913,9 @@
         const geometry=route.geometry;
         if(geometry&&Array.isArray(geometry.coordinates)){
           sendRouteToNative(geometry.coordinates);
+          setMapMode(true);
         }
         walkSession=null;
-        setMapMode(false);
         saveWalkSession();
         localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
 
