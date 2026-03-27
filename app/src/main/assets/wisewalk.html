@@ -297,9 +297,22 @@
     const ARRIVAL_THRESHOLD_M=35;
 
     const debugEntries=[];
+    let lastTitleTouchMs=0;
+
+    function formatDebugMessage(msg){
+      if(typeof msg==='string')return msg;
+      if(msg instanceof Error)return `${msg.name}: ${msg.message}`;
+      try{
+        const serialized=JSON.stringify(msg);
+        if(typeof serialized==='string')return serialized;
+      }catch(_){
+        // ignore JSON serialization errors (circular refs, BigInt, etc.)
+      }
+      try{return String(msg);}catch(_){return '[valor no serialitzable]';}
+    }
 
     function debugLog(msg){
-      const text=typeof msg==='string'?msg:JSON.stringify(msg);
+      const text=formatDebugMessage(msg);
       const timestamp=new Date().toLocaleTimeString('ca-ES',{hour12:false});
       const line=`[${timestamp}] ${text}`;
       console.log('[WiseWalk]',line);
@@ -1186,7 +1199,21 @@
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
     btnDebugExport.addEventListener('click',exportDebugLogs);
-    appTitle.addEventListener('dblclick',()=>{setDebugPanelVisibility(!debugPanelVisible);debugLog(`Panell debug ${debugPanelVisible?'obert':'tancat'}`);});
+    function toggleDebugPanelFromTitle(){
+      setDebugPanelVisibility(!debugPanelVisible);
+      debugLog(`Panell debug ${debugPanelVisible?'obert':'tancat'}`);
+    }
+
+    appTitle.addEventListener('dblclick',toggleDebugPanelFromTitle);
+    appTitle.addEventListener('touchend',()=>{
+      const now=Date.now();
+      if(now-lastTitleTouchMs<350){
+        toggleDebugPanelFromTitle();
+        lastTitleTouchMs=0;
+        return;
+      }
+      lastTitleTouchMs=now;
+    },{passive:true});
     themeToggle.addEventListener('click',()=>setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark'));
     document.getElementById('color-selector').addEventListener('click',e=>{
       const option=e.target.closest('.color-option');

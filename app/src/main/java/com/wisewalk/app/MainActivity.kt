@@ -2,6 +2,7 @@ package com.wisewalk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -38,6 +39,7 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
 
@@ -480,7 +482,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun exportDebugLog(content: String) {
-            activity.runOnUiThread {
+            thread(name = "WiseWalkDebugExport", start = true) {
                 try {
                     val logsDir = File(activity.cacheDir, "logs")
                     if (!logsDir.exists() && !logsDir.mkdirs()) {
@@ -490,25 +492,34 @@ class MainActivity : AppCompatActivity() {
                     val fileName = "wisewalk-debug-${System.currentTimeMillis()}.txt"
                     val logFile = File(logsDir, fileName)
                     logFile.writeText(content)
-
                     val uri = FileProvider.getUriForFile(
                         activity,
                         "${activity.packageName}.fileprovider",
                         logFile
                     )
-
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "WiseWalk debug log")
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    activity.runOnUiThread {
+                        try {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "WiseWalk debug log")
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            activity.startActivity(Intent.createChooser(shareIntent, "Compartir log de depuració"))
+                            Toast.makeText(activity, "Log exportat correctament", Toast.LENGTH_SHORT).show()
+                        } catch (e: ActivityNotFoundException) {
+                            Log.w("WiseWalk", "No s'ha trobat cap app per compartir el log", e)
+                            Toast.makeText(activity, "No hi ha cap app compatible per compartir", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("WiseWalk", "Error compartint debug log", e)
+                            Toast.makeText(activity, "No s'ha pogut compartir el log", Toast.LENGTH_SHORT).show()
+                        }
                     }
-
-                    activity.startActivity(Intent.createChooser(shareIntent, "Compartir log de depuració"))
-                    Toast.makeText(activity, "Log exportat correctament", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Log.e("WiseWalk", "Error exportant debug log", e)
-                    Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
