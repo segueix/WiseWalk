@@ -2,6 +2,7 @@ package com.wisewalk.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,8 +10,11 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
+import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.Bundle
+import java.io.File
+import java.util.concurrent.Executors
 import android.os.Looper
 import android.graphics.Color
 import android.util.Log
@@ -48,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
+    private val ioExecutor = Executors.newSingleThreadExecutor()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -150,6 +155,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         locationReceiver = null
+        ioExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -439,6 +445,7 @@ class MainActivity : AppCompatActivity() {
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
+                activity.mapView.mapOrientation = 0f
                 try {
                     val intent = Intent(activity, StepTrackingService::class.java).apply {
                         action = StepTrackingService.ACTION_STOP_GPS
@@ -459,6 +466,9 @@ class MainActivity : AppCompatActivity() {
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
+                if (!enabled) {
+                    activity.mapView.mapOrientation = 0f
+                }
             }
         }
 
@@ -471,6 +481,56 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        @JavascriptInterface
+        fun exportDebugLog(content: String) {
+            activity.ioExecutor.execute {
+                try {
+                    val logsDir = File(activity.cacheDir, "logs")
+                    if (!logsDir.exists() && !logsDir.mkdirs()) {
+                        throw IllegalStateException("No s'ha pogut crear cacheDir/logs")
+                    }
+
+                    val fileName = "wisewalk-debug-${System.currentTimeMillis()}.txt"
+                    val logFile = File(logsDir, fileName)
+                    logFile.writeText(content)
+
+                    val uri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        logFile
+                    )
+
+                    activity.runOnUiThread {
+                        try {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "WiseWalk debug log")
+                                putExtra(Intent.EXTRA_TEXT, "Log de debug de WiseWalk")
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
+                            val chooser = Intent.createChooser(shareIntent, "Compartir log de depuració")
+                            activity.startActivity(chooser)
+                            Toast.makeText(activity, "Log exportat correctament", Toast.LENGTH_SHORT).show()
+                        } catch (e: ActivityNotFoundException) {
+                            Log.e("WiseWalk", "No hi ha cap app per compartir logs", e)
+                            Toast.makeText(activity, "No hi ha cap app per compartir", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("WiseWalk", "Error iniciant compartició de log", e)
+                            Toast.makeText(activity, "No s'ha pogut compartir el log", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WiseWalk", "Error exportant debug log", e)
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
 
     }
 }
