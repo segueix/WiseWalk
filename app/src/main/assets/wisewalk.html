@@ -181,7 +181,7 @@
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
-            <div class="route-detail" id="route-elevation-wrapper" style="display:none"><div class="route-detail-value" id="route-elevation">+0 m</div><div class="route-detail-label">desnivell + total</div></div>
+            <div class="route-detail"><div class="route-detail-value" id="route-elevation">+0 m</div><div class="route-detail-label">desnivell + total</div></div>
             <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps (5.0 km/h)</div></div>
           </div>
           <div id="calorie-table" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;margin-top:.5rem"></div>
@@ -615,6 +615,27 @@
       return response.json();
     }
 
+    async function fetchElevationGain(coordinates){
+      try{
+        const step=Math.max(1,Math.floor(coordinates.length/90));
+        const sampled=[];
+        for(let i=0;i<coordinates.length;i+=step)sampled.push(coordinates[i]);
+        const lats=sampled.map(c=>c[1]).join(',');
+        const lngs=sampled.map(c=>c[0]).join(',');
+        const resp=await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`);
+        if(!resp.ok)return 0;
+        const data=await resp.json();
+        const elevations=data.elevation;
+        if(!Array.isArray(elevations)||elevations.length<2)return 0;
+        let gain=0;
+        for(let i=1;i<elevations.length;i++){
+          const diff=elevations[i]-elevations[i-1];
+          if(diff>0)gain+=diff;
+        }
+        return gain;
+      }catch(_){return 0;}
+    }
+
     async function generateRouteFromLocation(start){
       let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
       let chosenData=null;
@@ -714,7 +735,8 @@
         const routeResult=await generateRouteFromLocation(userLocation);
         const route=routeResult.data.routes[0];
         const totalDistanceKm=(route.distance*2)/1000;
-        const totalPositiveGainM=0;
+        const coords=route.geometry&&route.geometry.coordinates||[];
+        const totalPositiveGainM=await fetchElevationGain(coords);
         const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
         currentRoute={start:userLocation,end:routeResult.destination};

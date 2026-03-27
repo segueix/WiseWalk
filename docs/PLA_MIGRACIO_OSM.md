@@ -66,3 +66,35 @@
 >    - Substitueix les importacions antigues de Google Maps per les equivalents d'Osmdroid (`GeoPoint`, `MapView`, `Polyline`, etc.).
 >
 > ✅ **Validació:** Compila l'aplicació (`./gradlew assembleDebug`). No hi hauria d'haver cap error d'importació de Google Maps i el mapa que es mostra hauria de ser l'estàndard d'OpenStreetMap.
+
+---
+
+## Fase 5: Funció de mostreig i consulta d'elevació
+**Fitxer objectiu:** `app/src/main/assets/wisewalk.html`
+
+**Prompt per a l'agent:**
+> A l'script JS de `wisewalk.html`, crea una nova funció asíncrona anomenada `fetchElevationGain(coordinates)`.
+> Aquesta funció ha de fer el següent:
+> 1. Rebre l'array de coordenades GeoJSON (format `[lng, lat]`) que retorna OSRM.
+> 2. Com que Open-Meteo accepta un màxim de 100 punts per petició GET, aplica un mostreig a l'array per quedar-te amb un màxim de 90 punts equidistants de la ruta (calculant un `step = Math.max(1, Math.floor(coordinates.length / 90))`).
+> 3. Extreu dos arrays: un amb les latituds i un altre amb les longituds d'aquests punts mostrejats.
+> 4. Fes un `fetch` a l'API d'Open-Meteo amb el format: `https://api.open-meteo.com/v1/elevation?latitude=lat1,lat2...&longitude=lng1,lng2...`
+> 5. Del JSON de resposta (`data.elevation`), calcula el desnivell positiu acumulat (`totalPositiveGainM`). Això es fa iterant sobre l'array d'elevacions i sumant la diferència només si el punt actual és més alt que l'anterior (`elevations[i] - elevations[i-1] > 0`).
+> 6. Retorna el valor total del desnivell positiu. Si la petició falla, retorna `0` perquè la ruta es pugui continuar mostrant sense bloquejar l'app.
+>
+> ✅ **Validació:** Verifica visualment al codi que la funció construeix bé la URL amb paràmetres separats per comes i retorna un número.
+
+---
+
+## Fase 6: Integració de l'elevació al flux principal
+**Fitxer objectiu:** `app/src/main/assets/wisewalk.html`
+
+**Prompt per a l'agent:**
+> Actualitza la funció `generateRandomRoute()` a `wisewalk.html` per integrar el nou càlcul d'elevació i restaurar la UI.
+> 1. Just després d'obtenir la ruta correcta d'OSRM (`routeResult.data`), extreu l'array complet de coordenades de la geometria de la ruta (`routeResult.data.routes[0].geometry.coordinates`).
+> 2. Crida la nova funció `fetchElevationGain` passant-li aquestes coordenades i guarda el resultat a la variable `totalPositiveGainM`.
+> 3. Elimina qualsevol codi temporal de la "Fase 3" que forçava l'elevació a 0.
+> 4. Assegura't que l'element HTML de l'elevació (`#route-elevation` i el seu contenidor) torna a ser visible (elimina el `display: none` si el vas afegir anteriorment).
+> 5. Actualitza el text de `#route-elevation` amb el valor obtingut (`+${Math.round(totalPositiveGainM)} m`).
+>
+> ✅ **Validació:** Genera una ruta nova a l'aplicació. Hauries de veure de nou el desnivell a la interfície i el càlcul de calories s'hauria d'ajustar a aquest desnivell, mantenint l'app completament independent i sense claus API.
