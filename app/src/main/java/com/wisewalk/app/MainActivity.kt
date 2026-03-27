@@ -329,9 +329,14 @@ class MainActivity : AppCompatActivity() {
                 val js = "window.wiseWalkOnPermissionUpdate && window.wiseWalkOnPermissionUpdate($s);"
                 binding.webView.post { binding.webView.evaluateJavascript(js, null) }
 
-                if (pendingLocationRequest && hasLocationPermission()) {
+                if (pendingLocationRequest) {
                     pendingLocationRequest = false
-                    getCurrentLocation()
+                    if (hasLocationPermission()) {
+                        getCurrentLocation()
+                    } else {
+                        val js = "window.wiseWalkOnLocationError && window.wiseWalkOnLocationError('Permís de localització denegat.');"
+                        binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+                    }
                 }
             }
             LOCATION_PERMISSION_REQUEST -> {

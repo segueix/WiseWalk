@@ -844,6 +844,7 @@
 
     function setRouteUserLocation(lat,lng){
       userLocation={lat,lng};
+      clearLocationTimeout();
       if(walkSession&&walkSession.activeLeg){
         const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
         if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
@@ -861,8 +862,23 @@
       setRouteInfoText('Ubicació obtinguda! Genera una ruta.');
     }
 
+    let locationTimeoutId=null;
+
+    function clearLocationTimeout(){
+      if(locationTimeoutId){clearTimeout(locationTimeoutId);locationTimeoutId=null;}
+    }
+
     function getLocation(){
       setRouteInfoText('Obtenint ubicació...');
+      clearLocationTimeout();
+      locationTimeoutId=setTimeout(()=>{
+        if(!userLocation&&pendingRouteGeneration){
+          debugLog('Timeout de 20s obtenint ubicació');
+          pendingRouteGeneration=false;
+          btnGenerateRoute.disabled=false;
+          setRouteInfoText('No s\'ha pogut obtenir la ubicació. Comprova el GPS i els permisos.');
+        }
+      },20000);
       if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
         WiseWalkAndroid.requestPermissions();
       }
@@ -923,7 +939,6 @@
         const geometry=route.geometry;
         if(geometry&&Array.isArray(geometry.coordinates)){
           sendRouteToNative(geometry.coordinates);
-          setMapMode(true);
         }
         walkSession=null;
         saveWalkSession();
@@ -1196,6 +1211,13 @@
 
     window.wiseWalkSetLocation=function(lat,lng){
       setRouteUserLocation(lat,lng);
+    };
+
+    window.wiseWalkOnLocationError=function(msg){
+      debugLog(`Error de localització: ${msg}`);
+      pendingRouteGeneration=false;
+      setRouteInfoText(msg||'No s\'ha pogut obtenir la ubicació.');
+      btnGenerateRoute.disabled=false;
     };
 
     formSetup.addEventListener('submit',e=>{
