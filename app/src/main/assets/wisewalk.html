@@ -181,7 +181,7 @@
           <div class="route-info-text" id="route-info">Prem el botó per generar una ruta aleatòria d'anada i tornada.</div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància total</div></div>
-            <div class="route-detail"><div class="route-detail-value" id="route-elevation">+0 m</div><div class="route-detail-label">desnivell + total</div></div>
+            <div class="route-detail" id="route-elevation-wrapper" style="display:none"><div class="route-detail-value" id="route-elevation">+0 m</div><div class="route-detail-label">desnivell + total</div></div>
             <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps (5.0 km/h)</div></div>
           </div>
           <div id="calorie-table" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.5rem;margin-top:.5rem"></div>
@@ -631,14 +631,14 @@
         }
 
         const data=await fetchRouteWithOsrm(start,destination);
-        if(!data.features||data.features.length===0)continue;
+        if(!data.routes||data.routes.length===0)continue;
 
-        const summary=data.features[0].properties&&data.features[0].properties.summary?data.features[0].properties.summary:null;
-        if(!summary||typeof summary.distance!=='number')continue;
+        const route=data.routes[0];
+        if(typeof route.distance!=='number')continue;
 
-        const totalDistanceKm=(summary.distance*2)/1000;
+        const totalDistanceKm=(route.distance*2)/1000;
         if(Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM)<=DISTANCE_TOLERANCE_KM){
-          const geometry=data.features[0].geometry;
+          const geometry=route.geometry;
           const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
             ?geometry.coordinates[geometry.coordinates.length-1]
             :null;
@@ -712,17 +712,15 @@
 
       try{
         const routeResult=await generateRouteFromLocation(userLocation);
-        const summary=routeResult.data.features[0].properties.summary;
-        const totalDistanceKm=(summary.distance*2)/1000;
-        const ascent=summary.ascent||0;
-        const descent=summary.descent||0;
-        const totalPositiveGainM=ascent+descent;
+        const route=routeResult.data.routes[0];
+        const totalDistanceKm=(route.distance*2)/1000;
+        const totalPositiveGainM=0;
         const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
         currentRoute={start:userLocation,end:routeResult.destination};
         previousDestination=routeResult.destination;
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
-        const geometry=routeResult.data.features[0].geometry;
+        const geometry=route.geometry;
         if(geometry&&Array.isArray(geometry.coordinates)){
           sendRouteToNative(geometry.coordinates);
         }
