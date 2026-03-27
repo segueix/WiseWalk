@@ -19,6 +19,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.view.View
+import android.widget.Toast
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
@@ -173,12 +174,12 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("MissingPermission")
     fun getCurrentLocation() {
-        if (!hasLocationPermission()) {
-            requestLocationPermission()
-            return
-        }
-
         try {
+            if (!hasLocationPermission()) {
+                requestLocationPermission()
+                return
+            }
+
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
                 .setWaitForAccurateLocation(true)
                 .setMinUpdateIntervalMillis(500)
@@ -204,8 +205,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: SecurityException) {
-            Log.w("WiseWalk", "Location permission revoked during request", e)
+            Log.e("WiseWalk", "Error de permisos obtenint la localització (SecurityException)", e)
             requestLocationPermission()
+        } catch (e: IllegalStateException) {
+            Log.e("WiseWalk", "Possible problema de hardware GPS/servei de localització no disponible", e)
+        } catch (e: Exception) {
+            Log.e("WiseWalk", "Error inesperat obtenint la localització (permisos o hardware GPS)", e)
         }
     }
 
@@ -454,6 +459,16 @@ class MainActivity : AppCompatActivity() {
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
+            }
+        }
+
+        @JavascriptInterface
+        fun logError(message: String) {
+            Log.e("WiseWalkJS", message)
+            if (message.contains("Error", ignoreCase = true)) {
+                activity.runOnUiThread {
+                    Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
