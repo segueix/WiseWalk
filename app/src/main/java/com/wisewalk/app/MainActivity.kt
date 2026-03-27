@@ -26,24 +26,22 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.*
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.OnMapReadyCallback
-import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
-import com.google.android.gms.maps.model.PolylineOptions
 import com.wisewalk.app.databinding.ActivityMainBinding
 import org.json.JSONArray
 import org.json.JSONObject
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Polyline
 
-class MainActivity : AppCompatActivity(), OnMapReadyCallback {
+class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences("wisewalk_prefs", Context.MODE_PRIVATE) }
-    private var mMap: GoogleMap? = null
-    
+    private lateinit var mapView: MapView
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
@@ -54,9 +52,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Configuration.getInstance().load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+        Configuration.getInstance().userAgentValue = packageName
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        initMapFragment()
+        initMap()
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -65,7 +66,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         wv.webViewClient = WebViewClient()
         wv.setBackgroundColor(Color.TRANSPARENT)
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        
+
         wv.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(
                 origin: String?,
@@ -126,15 +127,17 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 if (wv.canGoBack()) wv.goBack() else finish()
             }
         })
-        
+
     }
-    
+
     override fun onResume() {
         super.onResume()
+        mapView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
+        mapView.onPause()
     }
 
     override fun onDestroy() {
@@ -142,43 +145,18 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         locationReceiver = null
         super.onDestroy()
     }
-    
+
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun initMapFragment() {
-        val mapFragment = supportFragmentManager.findFragmentById(R.id.mapFragment) as? SupportMapFragment
-        mapFragment?.getMapAsync(this)
+    private fun initMap() {
+        mapView = binding.mapView
+        mapView.setTileSource(TileSourceFactory.MAPNIK)
+        mapView.setMultiTouchControls(true)
+        mapView.controller.setZoom(15.0)
     }
 
-    override fun onMapReady(googleMap: GoogleMap) {
-        mMap = googleMap
-        enableMyLocationOnMap()
-        // Hide map fragment by default; setMapModeNative(true) will show it
-        supportFragmentManager.findFragmentById(R.id.mapFragment)?.view?.visibility = View.GONE
-
-        // Validate API key from manifest
-        try {
-            val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-            val key = appInfo.metaData?.getString("com.google.android.geo.API_KEY") ?: ""
-            if (key.isBlank() || key == "CLAU_BUIDA") {
-                Log.e("WiseWalk", "Google Maps API key is missing or invalid: '$key'")
-            } else {
-                Log.d("WiseWalk", "Google Maps API key is configured (${key.take(8)}...)")
-            }
-        } catch (e: Exception) {
-            Log.e("WiseWalk", "Could not read API key from manifest", e)
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun enableMyLocationOnMap() {
-        if (hasLocationPermission()) {
-            mMap?.isMyLocationEnabled = true
-        }
-    }
-    
     private fun requestLocationPermission() {
         ActivityCompat.requestPermissions(
             this,
@@ -193,13 +171,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             requestLocationPermission()
             return
         }
-        
+
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
             .setWaitForAccurateLocation(true)
             .setMinUpdateIntervalMillis(500)
             .setMaxUpdates(1)
             .build()
-        
+
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
             object : LocationCallback() {
@@ -212,14 +190,14 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             },
             Looper.getMainLooper()
         )
-        
+
         fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
             location?.let {
                 sendLocationToWeb(it.latitude, it.longitude)
             }
         }
     }
-    
+
     private fun sendLocationToWeb(lat: Double, lng: Double) {
         val js = "window.wiseWalkSetLocation && window.wiseWalkSetLocation($lat, $lng);"
         binding.webView.post {
@@ -228,11 +206,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun drawRoute(coordinatesJson: String) {
-        val map = mMap ?: return
         try {
             val coordinates = JSONArray(coordinatesJson)
-            val points = mutableListOf<LatLng>()
-            val boundsBuilder = LatLngBounds.Builder()
+            val points = mutableListOf<GeoPoint>()
 
             for (i in 0 until coordinates.length()) {
                 val point = coordinates.optJSONArray(i) ?: continue
@@ -242,41 +218,31 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                 val lat = point.optDouble(1, Double.NaN)
                 if (lat.isNaN() || lng.isNaN()) continue
 
-                val latLng = LatLng(lat, lng)
-                points.add(latLng)
-                boundsBuilder.include(latLng)
+                points.add(GeoPoint(lat, lng))
             }
 
-            map.clear()
-            if (points.size < 2) {
-                enableMyLocationOnMap()
-                return
+            mapView.overlays.clear()
+            if (points.size < 2) return
+
+            val polyline = Polyline().apply {
+                setPoints(points)
+                outlinePaint.color = Color.parseColor("#2E7D32")
+                outlinePaint.strokeWidth = 12f
             }
+            mapView.overlays.add(polyline)
 
-            map.addPolyline(
-                PolylineOptions()
-                    .addAll(points)
-                    .color(Color.parseColor("#2E7D32"))
-                    .width(12f)
-            )
-
-            val paddingPx = (resources.displayMetrics.density * 72).toInt()
-            map.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), paddingPx))
-            enableMyLocationOnMap()
+            val boundingBox = BoundingBox.fromGeoPoints(points)
+            mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
+            mapView.invalidate()
         } catch (_: Throwable) {
             // Ignore malformed route payloads from JS bridge.
         }
     }
 
     private fun animateCameraForWalkMode(lat: Double, lng: Double, bearing: Float) {
-        val map = mMap ?: return
-        val cameraPosition = CameraPosition.Builder()
-            .target(LatLng(lat, lng))
-            .zoom(18f)
-            .tilt(45f)
-            .bearing(bearing)
-            .build()
-        map.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition))
+        val point = GeoPoint(lat, lng)
+        mapView.controller.animateTo(point, 18.0, 800)
+        mapView.mapOrientation = -bearing
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -315,7 +281,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         if (!hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)) {
             perms.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
-        
+
         if (perms.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, perms.toTypedArray(), PERMISSIONS_REQUEST)
         }
@@ -323,29 +289,28 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         when (requestCode) {
             PERMISSIONS_REQUEST -> {
                 val s = JSONObject().apply {
-                    put("permissionActivity", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) 
+                    put("permissionActivity", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                         hasPermission(Manifest.permission.ACTIVITY_RECOGNITION) else true)
-                    put("permissionNotif", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) 
+                    put("permissionNotif", if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                         hasPermission(Manifest.permission.POST_NOTIFICATIONS) else true)
                     put("permissionLocation", hasPermission(Manifest.permission.ACCESS_FINE_LOCATION))
                 }
                 val js = "window.wiseWalkOnPermissionUpdate && window.wiseWalkOnPermissionUpdate($s);"
                 binding.webView.post { binding.webView.evaluateJavascript(js, null) }
-                
+
             }
             LOCATION_PERMISSION_REQUEST -> {
                 val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
                 pendingGeolocationCallback?.invoke(pendingGeolocationOrigin, granted, false)
                 pendingGeolocationCallback = null
                 pendingGeolocationOrigin = null
-                
+
                 if (granted) {
                     getCurrentLocation()
-                    enableMyLocationOnMap()
                 }
             }
         }
@@ -353,14 +318,14 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun startBackgroundTracking() {
         if (StepTrackingService.isRunning) return
-        
+
         val serviceIntent = Intent(this, StepTrackingService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
             startService(serviceIntent)
         }
-        
+
     }
 
     private fun stopBackgroundTracking() {
@@ -417,7 +382,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         fun openUrl(url: String) {
             activity.runOnUiThread { activity.openExternalUrl(url) }
         }
-        
+
         @JavascriptInterface
         fun getLocation() {
             activity.runOnUiThread { activity.getCurrentLocation() }
@@ -457,15 +422,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         @JavascriptInterface
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
-                val mapFragment = activity.supportFragmentManager.findFragmentById(R.id.mapFragment)
-                if (enabled) {
-                    mapFragment?.view?.visibility = View.VISIBLE
-                } else {
-                    mapFragment?.view?.visibility = View.GONE
-                }
+                activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
             }
         }
-
 
     }
 }
