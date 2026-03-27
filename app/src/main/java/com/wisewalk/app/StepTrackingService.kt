@@ -120,14 +120,24 @@ class StepTrackingService : Service(), SensorEventListener {
 
     private fun startTrackingForeground() {
         val notification = buildServiceNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIF_ID_SERVICE,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            )
-        } else {
-            startForeground(NOTIF_ID_SERVICE, notification)
+        try {
+            val hasLocation = androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                val serviceType = if (hasLocation) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                } else {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+                }
+                startForeground(NOTIF_ID_SERVICE, notification, serviceType)
+            } else {
+                startForeground(NOTIF_ID_SERVICE, notification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("WiseWalk", "Failed to start foreground service", e)
+            stopSelf()
         }
     }
 
@@ -154,45 +164,58 @@ class StepTrackingService : Service(), SensorEventListener {
     private fun startLocationUpdates() {
         if (locationCallback != null) return
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
-            .setWaitForAccurateLocation(true)
-            .setMinUpdateIntervalMillis(500)
-            .build()
-
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    val previousLocation = lastLocationForBearing
-                    val bearing = when {
-                        location.hasBearing() -> location.bearing
-                        previousLocation != null -> {
-                            computeBearing(
-                                previousLocation.latitude,
-                                previousLocation.longitude,
-                                location.latitude,
-                                location.longitude
-                            )
-                        }
-                        else -> 0f
-                    }
-                    lastLocationForBearing = location
-
-                    val locationIntent = Intent(ACTION_LOCATION_UPDATE).apply {
-                        putExtra(EXTRA_LAT, location.latitude)
-                        putExtra(EXTRA_LNG, location.longitude)
-                        putExtra(EXTRA_BEARING, bearing)
-                        setPackage(packageName)
-                    }
-                    sendBroadcast(locationIntent)
-                }
-            }
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            android.util.Log.w("WiseWalk", "Location permission not granted, skipping location updates")
+            return
         }
 
-        fusedLocationClient.requestLocationUpdates(
-            locationRequest,
-            locationCallback!!,
-            Looper.getMainLooper()
-        )
+        try {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
+                .setWaitForAccurateLocation(true)
+                .setMinUpdateIntervalMillis(500)
+                .build()
+
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { location ->
+                        val previousLocation = lastLocationForBearing
+                        val bearing = when {
+                            location.hasBearing() -> location.bearing
+                            previousLocation != null -> {
+                                computeBearing(
+                                    previousLocation.latitude,
+                                    previousLocation.longitude,
+                                    location.latitude,
+                                    location.longitude
+                                )
+                            }
+                            else -> 0f
+                        }
+                        lastLocationForBearing = location
+
+                        val locationIntent = Intent(ACTION_LOCATION_UPDATE).apply {
+                            putExtra(EXTRA_LAT, location.latitude)
+                            putExtra(EXTRA_LNG, location.longitude)
+                            putExtra(EXTRA_BEARING, bearing)
+                            setPackage(packageName)
+                        }
+                        sendBroadcast(locationIntent)
+                    }
+                }
+            }
+
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback!!,
+                Looper.getMainLooper()
+            )
+        } catch (e: SecurityException) {
+            android.util.Log.w("WiseWalk", "Location permission revoked during updates", e)
+            locationCallback = null
+        }
     }
 
     private fun stopLocationUpdates() {

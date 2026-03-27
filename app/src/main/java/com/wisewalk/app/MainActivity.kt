@@ -172,29 +172,34 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
-            .setWaitForAccurateLocation(true)
-            .setMinUpdateIntervalMillis(500)
-            .setMaxUpdates(1)
-            .build()
+        try {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
+                .setWaitForAccurateLocation(true)
+                .setMinUpdateIntervalMillis(500)
+                .setMaxUpdates(1)
+                .build()
 
-        fusedLocationClient.requestLocationUpdates(
-            locationRequest,
-            object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    result.lastLocation?.let { location ->
-                        sendLocationToWeb(location.latitude, location.longitude)
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                object : LocationCallback() {
+                    override fun onLocationResult(result: LocationResult) {
+                        result.lastLocation?.let { location ->
+                            sendLocationToWeb(location.latitude, location.longitude)
+                        }
+                        fusedLocationClient.removeLocationUpdates(this)
                     }
-                    fusedLocationClient.removeLocationUpdates(this)
-                }
-            },
-            Looper.getMainLooper()
-        )
+                },
+                Looper.getMainLooper()
+            )
 
-        fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-            location?.let {
-                sendLocationToWeb(it.latitude, it.longitude)
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let {
+                    sendLocationToWeb(it.latitude, it.longitude)
+                }
             }
+        } catch (e: SecurityException) {
+            Log.w("WiseWalk", "Location permission revoked during request", e)
+            requestLocationPermission()
         }
     }
 
@@ -318,14 +323,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun startBackgroundTracking() {
         if (StepTrackingService.isRunning) return
-
-        val serviceIntent = Intent(this, StepTrackingService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
+        if (!hasLocationPermission()) {
+            requestLocationPermission()
+            return
         }
 
+        try {
+            val serviceIntent = Intent(this, StepTrackingService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.w("WiseWalk", "Failed to start background tracking", e)
+        }
     }
 
     private fun stopBackgroundTracking() {
@@ -391,14 +403,23 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun startWalkLocationUpdates() {
             activity.runOnUiThread {
-                activity.isWalkGpsModeActive = true
-                val intent = Intent(activity, StepTrackingService::class.java).apply {
-                    action = StepTrackingService.ACTION_START_GPS
+                if (!activity.hasLocationPermission()) {
+                    activity.requestLocationPermission()
+                    return@runOnUiThread
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    activity.startForegroundService(intent)
-                } else {
-                    activity.startService(intent)
+                try {
+                    activity.isWalkGpsModeActive = true
+                    val intent = Intent(activity, StepTrackingService::class.java).apply {
+                        action = StepTrackingService.ACTION_START_GPS
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        activity.startForegroundService(intent)
+                    } else {
+                        activity.startService(intent)
+                    }
+                } catch (e: Exception) {
+                    Log.w("WiseWalk", "Failed to start walk location updates", e)
+                    activity.isWalkGpsModeActive = false
                 }
             }
         }
@@ -407,10 +428,14 @@ class MainActivity : AppCompatActivity() {
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
-                val intent = Intent(activity, StepTrackingService::class.java).apply {
-                    action = StepTrackingService.ACTION_STOP_GPS
+                try {
+                    val intent = Intent(activity, StepTrackingService::class.java).apply {
+                        action = StepTrackingService.ACTION_STOP_GPS
+                    }
+                    activity.startService(intent)
+                } catch (e: Exception) {
+                    Log.w("WiseWalk", "Failed to stop walk location updates", e)
                 }
-                activity.startService(intent)
             }
         }
 
