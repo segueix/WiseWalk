@@ -18,6 +18,7 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
+import android.graphics.Paint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -64,12 +65,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
+    private var isCompassEnabled: Boolean = false
     private var pendingLocationRequest: Boolean = false
     private var oneShotLocationCallback: LocationCallback? = null
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
     private lateinit var myLocationOverlay: MyLocationNewOverlay
     private var routePolyline: Polyline? = null
+    private var destinationMarker: PulsingMarkerOverlay? = null
     private var isProgrammaticMapMove: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -154,7 +157,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
                     if (isWalkGpsModeActive) {
-                        animateCameraForWalkMode(lat, lng, bearing)
+                        val geoPoint = GeoPoint(lat, lng)
+                        isProgrammaticMapMove = true
+                        myLocationOverlay.enableFollowLocation()
+                        mapView.controller.animateTo(geoPoint, mapView.zoomLevelDouble, 300L)
+                        mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
                     }
                 }
             }
@@ -179,12 +186,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.onResume()
         if (::myLocationOverlay.isInitialized) {
             myLocationOverlay.enableMyLocation()
-            // Only re-enable follow if in walk GPS mode; otherwise respect user's manual scroll
             if (isWalkGpsModeActive) {
                 myLocationOverlay.enableFollowLocation()
             }
         }
-        if (isWalkGpsModeActive) {
+        destinationMarker?.startAnimation(mapView)
+        if (isWalkGpsModeActive && isCompassEnabled) {
             rotationSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
             }
@@ -195,6 +202,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         mapView.onPause()
         if (::myLocationOverlay.isInitialized) myLocationOverlay.disableMyLocation()
+        destinationMarker?.stopAnimation()
         sensorManager.unregisterListener(this)
     }
 
@@ -245,7 +253,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         myLocationOverlay.enableFollowLocation()
         mapView.overlays.add(myLocationOverlay)
 
-        findViewById<ImageButton>(R.id.btn_zoom_in).setOnClickListener {
+        findViewById<View>(R.id.btn_zoom_in).setOnClickListener {
             try {
                 val currentZoom = mapView.zoomLevelDouble
                 if (currentZoom < mapView.maxZoomLevel) {
@@ -262,7 +270,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 isProgrammaticMapMove = false
             }
         }
-        findViewById<ImageButton>(R.id.btn_zoom_out).setOnClickListener {
+        findViewById<View>(R.id.btn_zoom_out).setOnClickListener {
             try {
                 val currentZoom = mapView.zoomLevelDouble
                 if (currentZoom > mapView.minZoomLevel) {
@@ -287,7 +295,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 if (loc != null) {
                     mapView.controller.animateTo(loc, 18.0, 500L)
                 } else {
-                    // No cached location yet – request a fresh fix and center when it arrives
                     getCurrentLocationAndCenter()
                 }
                 mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
@@ -296,39 +303,33 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 isProgrammaticMapMove = false
             }
         }
-        findViewById<ImageButton>(R.id.btn_show_route).setOnClickListener {
-            routePolyline?.let { polyline ->
-                if (polyline.points.isNotEmpty()) {
-                    try {
-                        isProgrammaticMapMove = true
-                        myLocationOverlay.disableFollowLocation()
-                        val boundingBox = BoundingBox.fromGeoPoints(polyline.points)
-                        if (mapView.width > 0 && mapView.height > 0) {
-                            mapView.zoomToBoundingBox(
-                                boundingBox,
-                                true,
-                                (resources.displayMetrics.density * 50).toInt()
-                            )
-                        }
-                        mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
-                    } catch (e: Exception) {
-                        Log.w("WiseWalk", "Error showing route bounds", e)
-                        isProgrammaticMapMove = false
-                    }
+
+        val compassBtn = findViewById<ImageButton>(R.id.btn_compass_toggle)
+        compassBtn.alpha = 0.5f
+        compassBtn.setOnClickListener {
+            isCompassEnabled = !isCompassEnabled
+            compassBtn.alpha = if (isCompassEnabled) 1.0f else 0.5f
+            if (isCompassEnabled) {
+                rotationSensor?.let {
+                    sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
                 }
+            } else {
+                sensorManager.unregisterListener(this)
+                mapView.mapOrientation = 0f
+                mapView.invalidate()
             }
         }
 
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
-                if (!isProgrammaticMapMove) {
+                if (!isProgrammaticMapMove && !isWalkGpsModeActive) {
                     myLocationOverlay.disableFollowLocation()
                 }
                 return false
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                if (!isProgrammaticMapMove) {
+                if (!isProgrammaticMapMove && !isWalkGpsModeActive) {
                     myLocationOverlay.disableFollowLocation()
                 }
                 return false
@@ -478,19 +479,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         val polyline = Polyline().apply {
                             setPoints(points)
                             outlinePaint.color = Color.parseColor("#2E7D32")
-                            outlinePaint.strokeWidth = 12f
+                            outlinePaint.strokeWidth = 18f
+                            outlinePaint.strokeCap = Paint.Cap.ROUND
+                            outlinePaint.strokeJoin = Paint.Join.ROUND
+                            outlinePaint.isAntiAlias = true
                         }
                         routePolyline = polyline
                         mapView.overlays.add(polyline)
 
-                        // Només fer zoom si el mapa és visible físicament
+                        // Add pulsing destination marker at last point
+                        destinationMarker?.stopAnimation()
+                        val marker = PulsingMarkerOverlay(points.last())
+                        destinationMarker = marker
+                        mapView.overlays.add(marker)
+                        marker.startAnimation(mapView)
+
                         if (mapView.width > 0 && mapView.height > 0) {
                             isProgrammaticMapMove = true
                             val boundingBox = BoundingBox.fromGeoPoints(points)
                             mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
                             mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
                         }
-                        
+
                         mapView.invalidate()
                         Log.d("WiseWalk", "drawRoute: ruta dibuixada amb ${points.size} punts")
                     } catch (e: Throwable) {
@@ -503,8 +513,51 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun animateCameraForWalkMode(@Suppress("UNUSED_PARAMETER") lat: Double, @Suppress("UNUSED_PARAMETER") lng: Double, @Suppress("UNUSED_PARAMETER") bearing: Float) {
-        // Control de càmera delegat a MyLocationNewOverlay.enableFollowLocation().
+    private fun updateRoute(coordinatesJson: String) {
+        thread(name = "WiseWalkRouteUpdate") {
+            try {
+                val coordinates = JSONArray(coordinatesJson)
+                val points = mutableListOf<GeoPoint>()
+
+                for (i in 0 until coordinates.length()) {
+                    val point = coordinates.optJSONArray(i) ?: continue
+                    if (point.length() < 2) continue
+                    val lng = point.optDouble(0, Double.NaN)
+                    val lat = point.optDouble(1, Double.NaN)
+                    if (lat.isNaN() || lng.isNaN()) continue
+                    points.add(GeoPoint(lat, lng))
+                }
+
+                if (points.size < 2) return@thread
+
+                runOnUiThread {
+                    try {
+                        routePolyline?.let { polyline ->
+                            polyline.setPoints(points)
+                            // Update destination marker position to last point
+                            destinationMarker?.setPosition(points.last())
+                            mapView.invalidate()
+                        } ?: run {
+                            val polyline = Polyline().apply {
+                                setPoints(points)
+                                outlinePaint.color = Color.parseColor("#2E7D32")
+                                outlinePaint.strokeWidth = 18f
+                                outlinePaint.strokeCap = Paint.Cap.ROUND
+                                outlinePaint.strokeJoin = Paint.Join.ROUND
+                                outlinePaint.isAntiAlias = true
+                            }
+                            routePolyline = polyline
+                            mapView.overlays.add(polyline)
+                            mapView.invalidate()
+                        }
+                    } catch (e: Throwable) {
+                        Log.e("WiseWalk", "updateRoute: error actualitzant ruta", e)
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e("WiseWalk", "updateRoute: error processant coordenades", e)
+            }
+        }
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -676,8 +729,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
                 try {
                     activity.isWalkGpsModeActive = true
-                    activity.rotationSensor?.let {
-                        activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
+                    activity.myLocationOverlay.enableFollowLocation()
+                    if (activity.isCompassEnabled) {
+                        activity.rotationSensor?.let {
+                            activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
+                        }
                     }
                     val intent = Intent(activity, StepTrackingService::class.java).apply {
                         action = StepTrackingService.ACTION_START_GPS
@@ -717,12 +773,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         @JavascriptInterface
+        fun updateRoute(coordinatesJson: String) {
+            activity.updateRoute(coordinatesJson)
+        }
+
+        @JavascriptInterface
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 if (enabled) {
                     activity.mapView.visibility = View.VISIBLE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.VISIBLE
-                    // Ensure map is properly resumed and location overlay active
                     activity.mapView.onResume()
                     if (activity::myLocationOverlay.isInitialized) {
                         activity.myLocationOverlay.enableMyLocation()
@@ -733,6 +793,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.mapView.visibility = View.GONE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
                     activity.mapView.mapOrientation = 0f
+                    activity.destinationMarker?.stopAnimation()
                 }
             }
         }
@@ -794,7 +855,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_ROTATION_VECTOR && isWalkGpsModeActive) {
+        if (event?.sensor?.type == Sensor.TYPE_ROTATION_VECTOR && isWalkGpsModeActive && isCompassEnabled) {
             val rotationMatrix = FloatArray(9)
             SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
             val orientationAngles = FloatArray(3)

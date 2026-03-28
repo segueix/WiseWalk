@@ -34,44 +34,52 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageButton
+        <TextView
             android:id="@+id/btn_zoom_in"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_marginBottom="8dp"
-            android:background="@android:drawable/btn_default"
+            android:background="@drawable/btn_map_control"
             android:contentDescription="Zoom in"
-            android:padding="12dp"
-            android:src="@android:drawable/btn_plus" />
+            android:gravity="center"
+            android:text="+"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
 
-        <ImageButton
+        <TextView
             android:id="@+id/btn_zoom_out"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_marginBottom="8dp"
-            android:background="@android:drawable/btn_default"
+            android:background="@drawable/btn_map_control"
             android:contentDescription="Zoom out"
-            android:padding="12dp"
-            android:src="@android:drawable/btn_minus" />
+            android:gravity="center"
+            android:text="–"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold" />
 
         <ImageButton
             android:id="@+id/btn_center_me"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:layout_marginBottom="8dp"
-            android:background="@android:drawable/btn_default"
+            android:background="@drawable/btn_map_control"
             android:contentDescription="Center map on my location"
-            android:padding="12dp"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
             android:src="@android:drawable/ic_menu_mylocation" />
 
         <ImageButton
-            android:id="@+id/btn_show_route"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="@android:drawable/btn_default"
-            android:contentDescription="Show full route"
-            android:padding="12dp"
-            android:src="@android:drawable/ic_menu_directions" />
+            android:id="@+id/btn_compass_toggle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/btn_map_control"
+            android:contentDescription="Toggle compass orientation"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_compass" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
