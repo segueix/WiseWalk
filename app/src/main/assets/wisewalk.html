@@ -717,6 +717,7 @@
     const TARGET_TOTAL_DISTANCE_KM=3.0;
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.4;
+    const URBAN_TORTUOSITY_FACTOR=1.4;
 
     const OSRM_ROUTE_ENDPOINTS=[
       'https://router.project-osrm.org/route/v1/foot',
@@ -780,7 +781,7 @@
     const GLOBAL_ROUTE_TIMEOUT_MS=30000;
 
     async function generateRouteFromLocation(start){
-      let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M;
+      let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M/URBAN_TORTUOSITY_FACTOR;
       let chosenData=null;
       let chosenDestination=null;
       let lastRouteError=null;
@@ -802,7 +803,7 @@
 
         let data;
         try{
-          debugLog(`Intent ${attempt+1}/${MAX_ROUTE_ATTEMPTS}: distància objectiu ${Math.round(targetDistanceMeters)}m`);
+          debugLog(`Intent ${attempt+1}/${MAX_ROUTE_ATTEMPTS}: radi línia recta ${Math.round(targetDistanceMeters)}m`);
           data=await fetchRouteWithOsrm(start,destination);
         }catch(err){
           debugLog(`Intent ${attempt+1} fallit: ${(err&&err.message)||err}`);
@@ -828,9 +829,14 @@
           break;
         }
 
-        targetDistanceMeters+=((TARGET_TOTAL_DISTANCE_KM-totalDistanceKm)/2)*800;
-        if(targetDistanceMeters<1200)targetDistanceMeters=1200;
-        if(targetDistanceMeters>1800)targetDistanceMeters=1800;
+        const actualOutboundM=route.distance;
+        const targetOutboundM=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
+        const correctionRatio=targetOutboundM/actualOutboundM;
+        targetDistanceMeters=targetDistanceMeters*correctionRatio;
+        const minRadius=300;
+        const maxRadius=TARGET_OUTBOUND_DISTANCE_M;
+        if(targetDistanceMeters<minRadius)targetDistanceMeters=minRadius;
+        if(targetDistanceMeters>maxRadius)targetDistanceMeters=maxRadius;
       }
 
       if(!chosenData||!chosenDestination){
