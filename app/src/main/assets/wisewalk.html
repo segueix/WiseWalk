@@ -862,6 +862,14 @@
       setRouteInfoText('Ubicació obtinguda! Genera una ruta.');
     }
 
+    window.wiseWalkOnLocationError=function(message){
+      debugLog('Error de localització natiu: '+message);
+      clearLocationTimeout();
+      pendingRouteGeneration=false;
+      btnGenerateRoute.disabled=false;
+      setRouteInfoText(message||'No s\'ha pogut obtenir la ubicació.');
+    };
+
     let locationTimeoutId=null;
 
     function clearLocationTimeout(){

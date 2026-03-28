@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import androidx.core.content.FileProvider
 import android.os.Build
@@ -182,7 +183,17 @@ class MainActivity : AppCompatActivity() {
         try {
             if (!hasLocationPermission()) {
                 pendingLocationRequest = true
-                Log.d("WiseWalk", "getCurrentLocation: permís no concedit, esperant callback de permisos")
+                Log.d("WiseWalk", "getCurrentLocation: permís no concedit, sol·licitant permisos")
+                requestLocationPermission()
+                return
+            }
+
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            if (!gpsEnabled && !networkEnabled) {
+                Log.w("WiseWalk", "getCurrentLocation: GPS i xarxa desactivats")
+                sendLocationErrorToWeb("El GPS està desactivat. Activa'l a la configuració del dispositiu.")
                 return
             }
 
@@ -212,16 +223,27 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: SecurityException) {
             Log.e("WiseWalk", "Error de permisos obtenint la localització (SecurityException)", e)
+            sendLocationErrorToWeb("Permís de localització necessari. Autoritza'l a la configuració.")
             requestLocationPermission()
         } catch (e: IllegalStateException) {
             Log.e("WiseWalk", "Possible problema de hardware GPS/servei de localització no disponible", e)
+            sendLocationErrorToWeb("Servei de localització no disponible. Comprova el GPS.")
         } catch (e: Exception) {
             Log.e("WiseWalk", "Error inesperat obtenint la localització (permisos o hardware GPS)", e)
+            sendLocationErrorToWeb("Error obtenint la ubicació. Torna-ho a provar.")
         }
     }
 
     private fun sendLocationToWeb(lat: Double, lng: Double) {
         val js = "window.wiseWalkSetLocation && window.wiseWalkSetLocation($lat, $lng);"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
+    private fun sendLocationErrorToWeb(message: String) {
+        val escaped = message.replace("'", "\\'")
+        val js = "window.wiseWalkOnLocationError && window.wiseWalkOnLocationError('$escaped');"
         binding.webView.post {
             binding.webView.evaluateJavascript(js, null)
         }
