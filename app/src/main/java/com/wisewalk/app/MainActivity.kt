@@ -18,6 +18,10 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.util.Log
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
@@ -41,9 +45,11 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import kotlin.concurrent.thread
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences("wisewalk_prefs", Context.MODE_PRIVATE) }
@@ -56,6 +62,9 @@ class MainActivity : AppCompatActivity() {
     private var isWalkGpsModeActive: Boolean = false
     private var pendingLocationRequest: Boolean = false
     private var oneShotLocationCallback: LocationCallback? = null
+    private lateinit var sensorManager: SensorManager
+    private var rotationSensor: Sensor? = null
+    private lateinit var myLocationOverlay: MyLocationNewOverlay
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,6 +94,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         initMap()
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -160,11 +171,19 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mapView.onResume()
+        if (::myLocationOverlay.isInitialized) myLocationOverlay.enableMyLocation()
+        if (isWalkGpsModeActive) {
+            rotationSensor?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+        }
     }
 
     override fun onPause() {
         super.onPause()
         mapView.onPause()
+        if (::myLocationOverlay.isInitialized) myLocationOverlay.disableMyLocation()
+        sensorManager.unregisterListener(this)
     }
 
     override fun onStop() {
@@ -202,7 +221,12 @@ class MainActivity : AppCompatActivity() {
         mapView = binding.mapView
         mapView.setTileSource(TileSourceFactory.MAPNIK)
         mapView.setMultiTouchControls(true)
+        mapView.setBuiltInZoomControls(true)
         mapView.controller.setZoom(15.0)
+
+        myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), mapView)
+        myLocationOverlay.enableMyLocation()
+        mapView.overlays.add(myLocationOverlay)
     }
 
     private fun requestLocationPermission() {
@@ -318,6 +342,9 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     try {
                         mapView.overlays.clear()
+                        if (::myLocationOverlay.isInitialized) {
+                            mapView.overlays.add(myLocationOverlay)
+                        }
                         val polyline = Polyline().apply {
                             setPoints(points)
                             outlinePaint.color = Color.parseColor("#2E7D32")
@@ -343,10 +370,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun animateCameraForWalkMode(lat: Double, lng: Double, bearing: Float) {
+    private fun animateCameraForWalkMode(lat: Double, lng: Double, @Suppress("UNUSED_PARAMETER") bearing: Float) {
         val point = GeoPoint(lat, lng)
         mapView.controller.animateTo(point, 18.0, 800)
-        mapView.mapOrientation = -bearing
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -518,6 +544,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 try {
                     activity.isWalkGpsModeActive = true
+                    activity.rotationSensor?.let {
+                        activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
+                    }
                     val intent = Intent(activity, StepTrackingService::class.java).apply {
                         action = StepTrackingService.ACTION_START_GPS
                     }
@@ -537,6 +566,7 @@ class MainActivity : AppCompatActivity() {
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
+                activity.sensorManager.unregisterListener(activity)
                 activity.mapView.mapOrientation = 0f
                 try {
                     val intent = Intent(activity, StepTrackingService::class.java).apply {
@@ -619,4 +649,17 @@ class MainActivity : AppCompatActivity() {
         }
 
     }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ROTATION_VECTOR && isWalkGpsModeActive) {
+            val rotationMatrix = FloatArray(9)
+            SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+            val orientationAngles = FloatArray(3)
+            SensorManager.getOrientation(rotationMatrix, orientationAngles)
+            val azimuthDeg = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+            mapView.mapOrientation = -azimuthDeg
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
