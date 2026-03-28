@@ -798,6 +798,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         @JavascriptInterface
+        fun requestMapCenter() {
+            activity.runOnUiThread {
+                val center = activity.mapView.mapCenter
+                val js = "window.wiseWalkOnMapCenterSelected && window.wiseWalkOnMapCenterSelected(${center.latitude}, ${center.longitude});"
+                activity.binding.webView.evaluateJavascript(js, null)
+            }
+        }
+
+        @JavascriptInterface
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 if (enabled) {

@@ -118,6 +118,10 @@
     .address-gps-btn.saved{border-style:solid;background:var(--accent);color:#fff}
     .address-status{font-size:.75rem;color:var(--text-soft);margin-top:.35rem}
     .address-status.has-location{color:var(--accent);font-weight:500}
+    .map-picker-crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-100%);font-size:3rem;pointer-events:none;z-index:1000;display:none;filter:drop-shadow(0 4px 4px rgba(0,0,0,.4))}
+    .map-picker-crosshair.visible{display:block}
+    .btn-confirm-picker{position:fixed;bottom:2.5rem;left:50%;transform:translateX(-50%);width:85%;max-width:320px;z-index:1000;display:none;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:1.1rem}
+    .btn-confirm-picker.visible{display:flex}
     body.map-mode .walk-exit-btn.visible{display:block}
     body.map-mode .walk-info-box.visible{display:block}
   </style>
@@ -160,6 +164,7 @@
           <div class="form-group">
             <label>📍 Punt d'inici de ruta (opcional)</label>
             <button type="button" class="address-gps-btn" id="address-gps-setup">📡 Usar la meva ubicació actual</button>
+            <button type="button" class="address-gps-btn" style="margin-top:.5rem;background:var(--bg-card);color:var(--text);border-color:var(--border)" onclick="openLocationPicker()">🗺️ Triar punt exacte al mapa</button>
             <div class="address-status" id="address-status-setup">Les rutes començaran des del GPS en temps real.</div>
             <div style="margin:.5rem 0 0;font-size:.8rem;color:var(--text-soft);text-align:center">— o cerca una adreça —</div>
             <div class="address-wrapper" style="margin-top:.4rem">
@@ -263,6 +268,7 @@
           <div class="form-group">
             <label>📍 Punt d'inici de ruta</label>
             <button type="button" class="address-gps-btn" id="address-gps-config">📡 Usar la meva ubicació actual</button>
+            <button type="button" class="address-gps-btn" style="margin-top:.5rem;background:var(--bg-card);color:var(--text);border-color:var(--border)" onclick="openLocationPicker()">🗺️ Triar punt exacte al mapa</button>
             <div class="address-status" id="address-status-config">Les rutes començaran des del GPS en temps real.</div>
             <div style="margin:.5rem 0 0;font-size:.8rem;color:var(--text-soft);text-align:center">— o cerca una adreça —</div>
             <div class="address-wrapper" style="margin-top:.4rem">
@@ -306,6 +312,9 @@
     </div>
     <div id="debug-console" class="debug-console" aria-live="polite"></div>
   </div>
+
+  <div class="map-picker-crosshair" id="map-picker-crosshair">📍</div>
+  <button class="btn btn-confirm-picker" id="btn-confirm-picker">Confirmar Ubicació</button>
 
   <script>
     const screenSetup=document.getElementById('screen-setup');
@@ -373,8 +382,9 @@
       const addrInput=document.getElementById('address-'+suffix);
       const clearBtn=document.getElementById('address-clear-'+suffix);
       if(!statusEl)return;
-      if(selectedAddress&&selectedAddress.source==='gps'){
-        statusEl.textContent=`Ubicació guardada (${selectedAddress.lat.toFixed(5)}, ${selectedAddress.lng.toFixed(5)})`;
+      if(selectedAddress&&(selectedAddress.source==='gps'||selectedAddress.source==='map_picker')){
+        const label=selectedAddress.source==='gps'?'Ubicació GPS guardada':'Punt triat al mapa';
+        statusEl.textContent=`${label} (${selectedAddress.lat.toFixed(5)}, ${selectedAddress.lng.toFixed(5)})`;
         statusEl.classList.add('has-location');
         if(gpsBtn){gpsBtn.textContent='📡 Ubicació guardada';gpsBtn.classList.add('saved');}
         if(addrInput)addrInput.value='';
@@ -1724,6 +1734,44 @@
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
     btnDebugExport.addEventListener('click',exportDebugLogs);
+
+    /* ---- Lògica del Selector de Mapa (Pin Arrossegable) ---- */
+    const mapPickerCrosshair=document.getElementById('map-picker-crosshair');
+    const btnConfirmPicker=document.getElementById('btn-confirm-picker');
+
+    function openLocationPicker(){
+      setMapMode(true);
+      setWalkButtonsVisibility({start:false,claimOutbound:false,returnOrigin:false,claimReturn:false});
+      document.getElementById('route-info').style.display='none';
+      mapPickerCrosshair.classList.add('visible');
+      btnConfirmPicker.classList.add('visible');
+      if(selectedAddress&&selectedAddress.lat&&selectedAddress.lng){
+        if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
+          /* Centrem el mapa a la ubicació guardada */
+          WiseWalkAndroid.getLocation();
+        }
+      }else{
+        getLocation();
+      }
+    }
+
+    btnConfirmPicker.addEventListener('click',()=>{
+      if(window.WiseWalkAndroid&&window.WiseWalkAndroid.requestMapCenter){
+        window.WiseWalkAndroid.requestMapCenter();
+      }else{
+        debugLog("requestMapCenter no disponible (mode web).");
+      }
+    });
+
+    window.wiseWalkOnMapCenterSelected=function(lat,lng){
+      mapPickerCrosshair.classList.remove('visible');
+      btnConfirmPicker.classList.remove('visible');
+      document.getElementById('route-info').style.display='block';
+      setMapMode(false);
+      saveHomeAddress({source:'map_picker',lat:lat,lng:lng,displayName:'Punt exacte triat al mapa'});
+      debugLog('Ubicació fixada via mapa: '+lat.toFixed(5)+', '+lng.toFixed(5));
+    };
+
     function toggleDebugPanelFromTitle(){
       setDebugPanelVisibility(!debugPanelVisible);
       debugLog(`Panell debug ${debugPanelVisible?'obert':'tancat'}`);
