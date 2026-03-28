@@ -173,9 +173,10 @@ class StepTrackingService : Service(), SensorEventListener {
         }
 
         try {
-            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
                 .setWaitForAccurateLocation(true)
-                .setMinUpdateIntervalMillis(500)
+                .setMinUpdateIntervalMillis(1000)
+                .setMinUpdateDistanceMeters(3f)
                 .build()
 
             locationCallback = object : LocationCallback() {

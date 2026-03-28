@@ -9,10 +9,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import androidx.core.content.FileProvider
 import android.os.Build
 import android.os.Bundle
+import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
@@ -53,10 +55,29 @@ class MainActivity : AppCompatActivity() {
     private var locationReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
     private var pendingLocationRequest: Boolean = false
+    private var oneShotLocationCallback: LocationCallback? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .penaltyLog()
+                    .build()
+            )
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .detectActivityLeaks()
+                    .penaltyLog()
+                    .build()
+            )
+        }
 
         Configuration.getInstance().load(applicationContext, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
         Configuration.getInstance().userAgentValue = packageName
@@ -146,6 +167,11 @@ class MainActivity : AppCompatActivity() {
         mapView.onPause()
     }
 
+    override fun onStop() {
+        super.onStop()
+        removeOneShotLocationCallback()
+    }
+
     override fun onDestroy() {
         locationReceiver?.let {
             try {
@@ -155,7 +181,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
         locationReceiver = null
+        removeOneShotLocationCallback()
+        pendingGeolocationCallback = null
+        pendingGeolocationOrigin = null
         super.onDestroy()
+    }
+
+    private fun removeOneShotLocationCallback() {
+        oneShotLocationCallback?.let {
+            fusedLocationClient.removeLocationUpdates(it)
+            oneShotLocationCallback = null
+        }
     }
 
     private fun hasLocationPermission(): Boolean {
@@ -182,9 +218,21 @@ class MainActivity : AppCompatActivity() {
         try {
             if (!hasLocationPermission()) {
                 pendingLocationRequest = true
-                Log.d("WiseWalk", "getCurrentLocation: permís no concedit, esperant callback de permisos")
+                Log.d("WiseWalk", "getCurrentLocation: permís no concedit, sol·licitant permisos")
+                requestLocationPermission()
                 return
             }
+
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            if (!gpsEnabled && !networkEnabled) {
+                Log.w("WiseWalk", "getCurrentLocation: GPS i xarxa desactivats")
+                sendLocationErrorToWeb("El GPS està desactivat. Activa'l a la configuració del dispositiu.")
+                return
+            }
+
+            removeOneShotLocationCallback()
 
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000)
                 .setWaitForAccurateLocation(true)
@@ -192,16 +240,22 @@ class MainActivity : AppCompatActivity() {
                 .setMaxUpdates(1)
                 .build()
 
+            val callback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    result.lastLocation?.let { location ->
+                        sendLocationToWeb(location.latitude, location.longitude)
+                    }
+                    fusedLocationClient.removeLocationUpdates(this)
+                    if (oneShotLocationCallback === this) {
+                        oneShotLocationCallback = null
+                    }
+                }
+            }
+            oneShotLocationCallback = callback
+
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
-                object : LocationCallback() {
-                    override fun onLocationResult(result: LocationResult) {
-                        result.lastLocation?.let { location ->
-                            sendLocationToWeb(location.latitude, location.longitude)
-                        }
-                        fusedLocationClient.removeLocationUpdates(this)
-                    }
-                },
+                callback,
                 Looper.getMainLooper()
             )
 
@@ -212,11 +266,14 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: SecurityException) {
             Log.e("WiseWalk", "Error de permisos obtenint la localització (SecurityException)", e)
+            sendLocationErrorToWeb("Permís de localització necessari. Autoritza'l a la configuració.")
             requestLocationPermission()
         } catch (e: IllegalStateException) {
             Log.e("WiseWalk", "Possible problema de hardware GPS/servei de localització no disponible", e)
+            sendLocationErrorToWeb("Servei de localització no disponible. Comprova el GPS.")
         } catch (e: Exception) {
             Log.e("WiseWalk", "Error inesperat obtenint la localització (permisos o hardware GPS)", e)
+            sendLocationErrorToWeb("Error obtenint la ubicació. Torna-ho a provar.")
         }
     }
 
@@ -227,42 +284,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun sendLocationErrorToWeb(message: String) {
+        val escaped = message.replace("'", "\\'")
+        val js = "window.wiseWalkOnLocationError && window.wiseWalkOnLocationError('$escaped');"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
     private fun drawRoute(coordinatesJson: String) {
-        try {
-            val coordinates = JSONArray(coordinatesJson)
-            Log.d("WiseWalk", "drawRoute: rebudes ${coordinates.length()} coordenades")
-            val points = mutableListOf<GeoPoint>()
+        thread(name = "WiseWalkRouteParser") {
+            try {
+                val coordinates = JSONArray(coordinatesJson)
+                Log.d("WiseWalk", "drawRoute: rebudes ${coordinates.length()} coordenades")
+                val points = mutableListOf<GeoPoint>()
 
-            for (i in 0 until coordinates.length()) {
-                val point = coordinates.optJSONArray(i) ?: continue
-                if (point.length() < 2) continue
+                for (i in 0 until coordinates.length()) {
+                    val point = coordinates.optJSONArray(i) ?: continue
+                    if (point.length() < 2) continue
 
-                val lng = point.optDouble(0, Double.NaN)
-                val lat = point.optDouble(1, Double.NaN)
-                if (lat.isNaN() || lng.isNaN()) continue
+                    val lng = point.optDouble(0, Double.NaN)
+                    val lat = point.optDouble(1, Double.NaN)
+                    if (lat.isNaN() || lng.isNaN()) continue
 
-                points.add(GeoPoint(lat, lng))
+                    points.add(GeoPoint(lat, lng))
+                }
+
+                if (points.size < 2) {
+                    Log.w("WiseWalk", "drawRoute: només ${points.size} punts vàlids, cal mínim 2")
+                    return@thread
+                }
+
+                runOnUiThread {
+                    try {
+                        mapView.overlays.clear()
+                        val polyline = Polyline().apply {
+                            setPoints(points)
+                            outlinePaint.color = Color.parseColor("#2E7D32")
+                            outlinePaint.strokeWidth = 12f
+                        }
+                        mapView.overlays.add(polyline)
+
+                        val boundingBox = BoundingBox.fromGeoPoints(points)
+                        mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
+                        mapView.invalidate()
+                        Log.d("WiseWalk", "drawRoute: ruta dibuixada amb ${points.size} punts")
+                    } catch (e: Throwable) {
+                        Log.e("WiseWalk", "drawRoute: error dibuixant ruta a la UI", e)
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e("WiseWalk", "drawRoute: error processant coordenades de ruta", e)
             }
-
-            mapView.overlays.clear()
-            if (points.size < 2) {
-                Log.w("WiseWalk", "drawRoute: només ${points.size} punts vàlids, cal mínim 2")
-                return
-            }
-
-            val polyline = Polyline().apply {
-                setPoints(points)
-                outlinePaint.color = Color.parseColor("#2E7D32")
-                outlinePaint.strokeWidth = 12f
-            }
-            mapView.overlays.add(polyline)
-
-            val boundingBox = BoundingBox.fromGeoPoints(points)
-            mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
-            mapView.invalidate()
-            Log.d("WiseWalk", "drawRoute: ruta dibuixada amb ${points.size} punts")
-        } catch (e: Throwable) {
-            Log.e("WiseWalk", "drawRoute: error processant coordenades de ruta", e)
         }
     }
 
@@ -334,8 +407,7 @@ class MainActivity : AppCompatActivity() {
                     if (hasLocationPermission()) {
                         getCurrentLocation()
                     } else {
-                        val js = "window.wiseWalkOnLocationError && window.wiseWalkOnLocationError('Permís de localització denegat.');"
-                        binding.webView.post { binding.webView.evaluateJavascript(js, null) }
+                        sendLocationErrorToWeb("Permís de localització denegat.")
                     }
                 }
             }
@@ -347,6 +419,8 @@ class MainActivity : AppCompatActivity() {
 
                 if (granted) {
                     getCurrentLocation()
+                } else {
+                    sendLocationErrorToWeb("Permís de localització denegat.")
                 }
             }
         }
@@ -473,7 +547,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun drawRoute(coordinatesJson: String) {
-            activity.runOnUiThread { activity.drawRoute(coordinatesJson) }
+            activity.drawRoute(coordinatesJson)
         }
 
         @JavascriptInterface
