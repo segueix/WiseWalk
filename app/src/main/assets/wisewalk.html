@@ -103,6 +103,16 @@
     .walk-info-time{font-size:1.15rem;font-weight:700;letter-spacing:.02em}
     .walk-info-distance{font-size:.88rem;opacity:.85;margin-top:2px}
     .walk-exit-btn{display:none;position:fixed;top:16px;left:16px;width:38px;height:38px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:1.2rem;z-index:1002;cursor:pointer;backdrop-filter:blur(6px);line-height:38px;text-align:center}
+    .address-wrapper{position:relative}
+    .address-input{width:100%;padding:1rem 1.2rem;border:2px solid var(--border);border-radius:14px;font-size:1.05rem;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text);-webkit-appearance:none}
+    .address-input:focus{outline:none;border-color:var(--accent);background:var(--bg-card)}
+    .address-suggestions{position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:0 0 14px 14px;max-height:200px;overflow-y:auto;z-index:100;display:none;box-shadow:0 4px 12px var(--shadow)}
+    .address-suggestions.visible{display:block}
+    .address-suggestion{padding:.75rem 1rem;font-size:.9rem;cursor:pointer;border-bottom:1px solid var(--border);color:var(--text)}
+    .address-suggestion:last-child{border-bottom:none}
+    .address-suggestion:hover,.address-suggestion:active{background:var(--accent-light)}
+    .address-clear-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-soft);display:none;padding:4px}
+    .address-clear-btn.visible{display:block}
     body.map-mode .walk-exit-btn.visible{display:block}
     body.map-mode .walk-info-box.visible{display:block}
   </style>
@@ -141,6 +151,15 @@
               <div><label for="wake-setup" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-setup" value="07:00" required></div>
               <div><label for="sleep-setup" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-setup" value="23:00" required></div>
             </div>
+          </div>
+          <div class="form-group">
+            <label for="address-setup">📍 Adreça d'inici de ruta (opcional)</label>
+            <div class="address-wrapper">
+              <input type="text" id="address-setup" class="address-input" placeholder="Escriu la teva adreça..." autocomplete="off">
+              <button type="button" class="address-clear-btn" id="address-clear-setup" title="Esborrar">✕</button>
+              <div class="address-suggestions" id="address-suggestions-setup"></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-soft);margin-top:.35rem">Les rutes començaran des d'aquesta adreça. Deixa buit per usar el GPS.</div>
           </div>
           <button type="submit" class="btn">Continuar</button>
         </form>
@@ -234,6 +253,15 @@
           <div class="summary-row"><span>Horari</span><span id="cfg-schedule">—</span></div>
         </div>
         <form id="form-config">
+          <div class="form-group">
+            <label for="address-config">📍 Adreça d'inici de ruta</label>
+            <div class="address-wrapper">
+              <input type="text" id="address-config" class="address-input" placeholder="Escriu la teva adreça..." autocomplete="off">
+              <button type="button" class="address-clear-btn" id="address-clear-config" title="Esborrar">✕</button>
+              <div class="address-suggestions" id="address-suggestions-config"></div>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-soft);margin-top:.35rem">Les rutes començaran des d'aquesta adreça. Deixa buit per usar el GPS.</div>
+          </div>
           <div class="form-group"><label>Sexe</label><div class="sex-selector"><div class="sex-option"><input type="radio" name="sex-config" id="sex-m-config" value="M" checked><label for="sex-m-config"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div><div class="sex-option"><input type="radio" name="sex-config" id="sex-f-config" value="F"><label for="sex-f-config"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div></div></div>
           <div class="form-group"><label for="age-config">Edat</label><div class="input-wrapper"><input type="number" id="age-config" inputmode="numeric" min="5" max="120" required><span class="unit">anys</span></div></div>
           <div class="form-group"><label for="height-config">Alçada</label><div class="input-wrapper"><input type="number" id="height-config" inputmode="numeric" min="100" max="250" required><span class="unit">cm</span></div></div>
@@ -317,6 +345,117 @@
     let returnCoordinates=null;
     const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
     const ARRIVAL_THRESHOLD_M=35;
+    const SNAP_DEVIATION_THRESHOLD_M=20;
+
+    /* ---- Address autocomplete with Nominatim ---- */
+    let addressDebounceTimer=null;
+    let selectedAddress=JSON.parse(localStorage.getItem('wisewalk-home-address')||'null');
+
+    function saveHomeAddress(addr){
+      selectedAddress=addr;
+      if(addr)localStorage.setItem('wisewalk-home-address',JSON.stringify(addr));
+      else localStorage.removeItem('wisewalk-home-address');
+    }
+
+    function setupAddressAutocomplete(inputId,suggestionsId,clearBtnId){
+      const input=document.getElementById(inputId);
+      const sugBox=document.getElementById(suggestionsId);
+      const clearBtn=document.getElementById(clearBtnId);
+      if(!input||!sugBox)return;
+
+      input.addEventListener('input',()=>{
+        const q=input.value.trim();
+        clearBtn.classList.toggle('visible',q.length>0);
+        if(q.length<3){sugBox.classList.remove('visible');sugBox.innerHTML='';return;}
+        clearTimeout(addressDebounceTimer);
+        addressDebounceTimer=setTimeout(()=>fetchAddressSuggestions(q,sugBox,input),400);
+      });
+
+      input.addEventListener('focus',()=>{
+        if(sugBox.children.length>0)sugBox.classList.add('visible');
+      });
+
+      document.addEventListener('click',(e)=>{
+        if(!input.contains(e.target)&&!sugBox.contains(e.target))sugBox.classList.remove('visible');
+      });
+
+      if(clearBtn){
+        clearBtn.addEventListener('click',()=>{
+          input.value='';
+          sugBox.classList.remove('visible');
+          sugBox.innerHTML='';
+          clearBtn.classList.remove('visible');
+          saveHomeAddress(null);
+        });
+      }
+    }
+
+    async function fetchAddressSuggestions(query,sugBox,input){
+      try{
+        const url=`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&accept-language=ca`;
+        const resp=await fetch(url,{headers:{'User-Agent':'WiseWalk/2.0'}});
+        if(!resp.ok)return;
+        const results=await resp.json();
+        sugBox.innerHTML='';
+        if(!results.length){sugBox.classList.remove('visible');return;}
+        results.forEach(r=>{
+          const div=document.createElement('div');
+          div.className='address-suggestion';
+          div.textContent=r.display_name;
+          div.addEventListener('click',()=>{
+            input.value=r.display_name;
+            saveHomeAddress({displayName:r.display_name,lat:parseFloat(r.lat),lng:parseFloat(r.lon)});
+            sugBox.classList.remove('visible');
+            document.getElementById(input.id.replace('address-','address-clear-')).classList.add('visible');
+          });
+          sugBox.appendChild(div);
+        });
+        sugBox.classList.add('visible');
+      }catch(err){
+        debugLog('Error cercant adreces: '+(err&&err.message||err));
+      }
+    }
+
+    /* ---- Coordinate persistence for screen-off survival ---- */
+    function saveRouteCoordinates(){
+      try{
+        const data={};
+        if(outboundCoordinates)data.outbound=outboundCoordinates;
+        if(returnCoordinates)data.ret=returnCoordinates;
+        localStorage.setItem('wisewalk-route-coords',JSON.stringify(data));
+      }catch(_){}
+    }
+
+    function restoreRouteCoordinates(){
+      try{
+        const data=JSON.parse(localStorage.getItem('wisewalk-route-coords')||'null');
+        if(!data)return;
+        if(data.outbound&&!outboundCoordinates)outboundCoordinates=data.outbound;
+        if(data.ret&&!returnCoordinates)returnCoordinates=data.ret;
+      }catch(_){}
+    }
+
+    /* ---- Continuous line interpolation ---- */
+    function projectPointOnSegment(px,py,ax,ay,bx,by){
+      const dx=bx-ax,dy=by-ay;
+      const lenSq=dx*dx+dy*dy;
+      if(lenSq===0)return{x:ax,y:ay,t:0};
+      let t=((px-ax)*dx+(py-ay)*dy)/lenSq;
+      t=Math.max(0,Math.min(1,t));
+      return{x:ax+t*dx,y:ay+t*dy,t};
+    }
+
+    function findClosestProjection(coordinates,lat,lng){
+      let minDist=Infinity,bestIdx=0,bestProj=null;
+      for(let i=0;i<coordinates.length-1;i++){
+        const ax=coordinates[i][0],ay=coordinates[i][1];
+        const bx=coordinates[i+1][0],by=coordinates[i+1][1];
+        const proj=projectPointOnSegment(lng,lat,ax,ay,bx,by);
+        const d=haversineDistance(lat,lng,proj.y,proj.x);
+        if(d<minDist){minDist=d;bestIdx=i;bestProj=proj;}
+      }
+      return{segmentIdx:bestIdx,proj:bestProj,distance:minDist};
+    }
 
     const debugEntries=[];
     let lastTitleTouchMs=0;
@@ -428,6 +567,16 @@
       document.getElementById('wake-config').value=profile.wakeTime;
       document.getElementById('sleep-config').value=profile.sleepTime;
       document.getElementById(profile.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
+      /* Restore address in config form */
+      const addrInput=document.getElementById('address-config');
+      const addrClear=document.getElementById('address-clear-config');
+      if(selectedAddress&&selectedAddress.displayName){
+        addrInput.value=selectedAddress.displayName;
+        addrClear.classList.add('visible');
+      }else{
+        addrInput.value='';
+        addrClear.classList.remove('visible');
+      }
       updateConfigSummary();
       updateCalorieGoals();
     }
@@ -470,6 +619,19 @@
       if(window.WiseWalkAndroid&&WiseWalkAndroid.updateRoute){
         try{WiseWalkAndroid.updateRoute(JSON.stringify(coordinates));}catch(_){}
       }
+    }
+
+    function sendSnappedPosition(lat,lng,snapped){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.updateSnappedPosition){
+        try{WiseWalkAndroid.updateSnappedPosition(lat,lng,snapped);}catch(_){}
+      }
+    }
+
+    function getRouteOrigin(){
+      if(selectedAddress&&selectedAddress.lat&&selectedAddress.lng){
+        return{lat:selectedAddress.lat,lng:selectedAddress.lng};
+      }
+      return userLocation;
     }
 
     function normalizeLongitude(lonDeg){
@@ -781,6 +943,12 @@
         showWalkInfoBox(false);
         return;
       }
+      /* Re-draw route from persisted coordinates after screen-off */
+      if(walkSession.activeLeg==='outbound'&&outboundCoordinates&&outboundCoordinates.length>=2){
+        sendRouteToNative(outboundCoordinates);
+      }else if(walkSession.activeLeg==='return'&&returnCoordinates&&returnCoordinates.length>=2){
+        sendRouteToNative(returnCoordinates);
+      }
       if(walkSession.activeLeg==='outbound'){
         setWalkButtonsVisibility({});
         showWalkInfoBox(true);
@@ -1019,21 +1187,34 @@
         const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
 
         if(coords&&coords.length>1){
-          const closestIdx=findClosestPointIndex(coords,lat,lng);
-          const remaining=getRemainingDistance(coords,closestIdx);
+          const projection=findClosestProjection(coords,lat,lng);
+          const lateralDist=projection.distance;
+          const segIdx=projection.segmentIdx;
+          const proj=projection.proj;
+
+          /* Send snapped position to native (snap if <=20m, real GPS otherwise) */
+          if(lateralDist<=SNAP_DEVIATION_THRESHOLD_M){
+            sendSnappedPosition(proj.y,proj.x,true);
+          }else{
+            sendSnappedPosition(lat,lng,false);
+          }
+
+          const remaining=getRemainingDistance(coords,segIdx+1)+
+            haversineDistance(proj.y,proj.x,coords[segIdx+1][1],coords[segIdx+1][0]);
 
           if(remaining<=ARRIVAL_THRESHOLD_M||getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
             completeCurrentLegByArrival();
             return;
           }
 
-          if(closestIdx>0){
-            const remainingCoords=coords.slice(closestIdx);
-            if(remainingCoords.length>=2){
-              updateRouteOnMap(remainingCoords);
-            }
+          /* Continuous line trim: interpolate from projected point */
+          const interpPoint=[proj.x,proj.y];
+          const remainingCoords=[interpPoint,...coords.slice(segIdx+1)];
+          if(remainingCoords.length>=2){
+            updateRouteOnMap(remainingCoords);
           }
         }else{
+          sendSnappedPosition(lat,lng,false);
           if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
             completeCurrentLegByArrival();
             return;
@@ -1113,7 +1294,8 @@
     }
 
     async function generateRandomRoute(){
-      if(!userLocation){
+      const origin=getRouteOrigin();
+      if(!origin){
         pendingRouteGeneration=true;
         setRouteInfoText('Obtenint ubicació per generar la ruta...');
         getLocation();
@@ -1123,16 +1305,16 @@
       btnGenerateRoute.disabled=true;
 
       try{
-        const routeResult=await generateRouteFromLocation(userLocation);
+        const routeResult=await generateRouteFromLocation(origin);
         const route=routeResult.data.routes[0];
         const coords=route.geometry&&route.geometry.coordinates||[];
 
         outboundCoordinates=coords;
-        currentRoute={start:userLocation,end:routeResult.destination};
+        currentRoute={start:origin,end:routeResult.destination};
         previousDestination=routeResult.destination;
 
         setRouteInfoText('Calculant ruta de tornada...');
-        const retCoords=await generateReturnRoute(routeResult.destination,userLocation);
+        const retCoords=await generateReturnRoute(routeResult.destination,origin);
         returnCoordinates=retCoords||[...coords].reverse();
 
         const outboundDistM=calculatePolylineDistance(outboundCoordinates);
@@ -1147,7 +1329,8 @@
 
         walkSession=null;
         saveWalkSession();
-        localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
+        localStorage.setItem('wisewalk-last-origin',JSON.stringify(origin));
+        saveRouteCoordinates();
 
         document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
         document.getElementById('route-elevation').textContent=`+${Math.round(totalPositiveGainM)} m`;
@@ -1179,8 +1362,9 @@
         return;
       }
       const initialM=outboundCoordinates?calculatePolylineDistance(outboundCoordinates):0;
+      const routeOrigin=getRouteOrigin()||currentRoute.start;
       walkSession={
-        origin:{lat:currentRoute.start.lat,lng:currentRoute.start.lng},
+        origin:{lat:routeOrigin.lat,lng:routeOrigin.lng},
         destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
         activeLeg:'outbound',
         startedAt:Date.now(),
@@ -1210,6 +1394,7 @@
       if(returnCoordinates&&returnCoordinates.length>=2){
         sendRouteToNative(returnCoordinates);
       }
+      saveRouteCoordinates();
 
       setWalkButtonsVisibility({returnOrigin:true});
       setRouteInfoText(`Anada reclamada: ${burnedKcal} kcal. Prem per iniciar la tornada.`);
@@ -1495,6 +1680,26 @@
     setTheme(savedTheme||(prefersDark?'dark':'light'));
     setColorTheme(localStorage.getItem('wisewalk-color')||'green');
     updateConfigSummary();
+
+    /* Init address autocomplete */
+    setupAddressAutocomplete('address-config','address-suggestions-config','address-clear-config');
+    setupAddressAutocomplete('address-setup','address-suggestions-setup','address-clear-setup');
+
+    /* Restore saved address into inputs */
+    if(selectedAddress&&selectedAddress.displayName){
+      const acfg=document.getElementById('address-config');
+      const asetup=document.getElementById('address-setup');
+      if(acfg)acfg.value=selectedAddress.displayName;
+      if(asetup)asetup.value=selectedAddress.displayName;
+      const cc=document.getElementById('address-clear-config');
+      const cs=document.getElementById('address-clear-setup');
+      if(cc)cc.classList.add('visible');
+      if(cs)cs.classList.add('visible');
+    }
+
+    /* Restore route coordinates for screen-off survival */
+    restoreRouteCoordinates();
+
     if(loadProfile()){
       updateCalorieGoals();
       updateActivityTotals();
