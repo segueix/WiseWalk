@@ -90,14 +90,21 @@
     body.map-mode .route-container{background:rgba(255,255,255,.90);backdrop-filter:blur(4px)}
     [data-theme="dark"] body.map-mode .route-container{background:rgba(32,36,36,.82)}
     .map-bar{display:none;align-items:center;gap:.75rem;padding:.25rem 0}
-    body.map-mode .map-bar{display:flex;position:fixed;top:0;left:0;width:100%;background:var(--bg-card);padding:1rem;z-index:1000;box-shadow:0 4px 12px var(--shadow);border-bottom-left-radius:14px;border-bottom-right-radius:14px}
-    body.map-mode .route-container{padding-top:80px!important}
+    body.map-mode .map-bar{display:none!important}
+    body.map-mode .route-container{padding-top:12px!important}
     body.map-mode #route-info{display:none}
     body.map-mode .route-details{display:none!important}
     body.map-mode #calorie-table{display:none!important}
     body.map-mode #btn-generate-route{display:none!important}
+    body.map-mode .result-header{display:none!important}
     .map-back-btn{width:36px;height:36px;font-size:1.1rem;border-radius:10px;flex-shrink:0;background:var(--accent);color:#fff}
     .map-bar-info{flex:1;font-weight:600;font-size:.95rem;color:var(--text)}
+    .walk-info-box{display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;padding:10px 22px;border-radius:14px;z-index:1001;text-align:center;backdrop-filter:blur(6px);min-width:140px}
+    .walk-info-time{font-size:1.15rem;font-weight:700;letter-spacing:.02em}
+    .walk-info-distance{font-size:.88rem;opacity:.85;margin-top:2px}
+    .walk-exit-btn{display:none;position:fixed;top:16px;left:16px;width:38px;height:38px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:1.2rem;z-index:1002;cursor:pointer;backdrop-filter:blur(6px);line-height:38px;text-align:center}
+    body.map-mode .walk-exit-btn.visible{display:block}
+    body.map-mode .walk-info-box.visible{display:block}
   </style>
 </head>
 <body>
@@ -246,6 +253,12 @@
     </div>
   </div>
 
+  <button class="walk-exit-btn" id="walk-exit-btn">&#8592;</button>
+  <div class="walk-info-box" id="walk-info-box">
+    <div class="walk-info-time" id="walk-info-time">0:00</div>
+    <div class="walk-info-distance" id="walk-info-distance">0 m</div>
+  </div>
+
   <div id="debug-panel" class="debug-panel" aria-hidden="true">
     <div class="debug-title">Mode Debug</div>
     <div class="debug-actions">
@@ -282,6 +295,10 @@
     const btnDebugDestination=document.getElementById('btn-debug-destination');
     const btnDebugOrigin=document.getElementById('btn-debug-origin');
     const btnDebugExport=document.getElementById('btn-debug-export');
+    const walkInfoBox=document.getElementById('walk-info-box');
+    const walkInfoTime=document.getElementById('walk-info-time');
+    const walkInfoDistance=document.getElementById('walk-info-distance');
+    const walkExitBtn=document.getElementById('walk-exit-btn');
     const appTitle=document.querySelector('h1');
     const html=document.documentElement;
     const metaTheme=document.querySelector('meta[name="theme-color"]');
@@ -296,6 +313,8 @@
     let walkWatchId=null;
     let walkTimerId=null;
     let pendingRouteGeneration=false;
+    let outboundCoordinates=null;
+    let returnCoordinates=null;
     const WALK_SPEEDS_KMH=[4.0,5.0,6.0];
     const ARRIVAL_THRESHOLD_M=35;
 
@@ -421,6 +440,38 @@
       return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
     }
 
+    function calculatePolylineDistance(coordinates){
+      let total=0;
+      for(let i=1;i<coordinates.length;i++){
+        total+=haversineDistance(coordinates[i-1][1],coordinates[i-1][0],coordinates[i][1],coordinates[i][0]);
+      }
+      return total;
+    }
+
+    function findClosestPointIndex(coordinates,lat,lng){
+      let minDist=Infinity,minIdx=0;
+      for(let i=0;i<coordinates.length;i++){
+        const d=haversineDistance(lat,lng,coordinates[i][1],coordinates[i][0]);
+        if(d<minDist){minDist=d;minIdx=i;}
+      }
+      return minIdx;
+    }
+
+    function getRemainingDistance(coordinates,fromIdx){
+      let total=0;
+      for(let i=fromIdx;i<coordinates.length-1;i++){
+        total+=haversineDistance(coordinates[i][1],coordinates[i][0],coordinates[i+1][1],coordinates[i+1][0]);
+      }
+      return total;
+    }
+
+    function updateRouteOnMap(coordinates){
+      if(!Array.isArray(coordinates)||coordinates.length<2)return;
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.updateRoute){
+        try{WiseWalkAndroid.updateRoute(JSON.stringify(coordinates));}catch(_){}
+      }
+    }
+
     function normalizeLongitude(lonDeg){
       let lon=lonDeg;
       while(lon>180)lon-=360;
@@ -528,6 +579,7 @@
       walkSession=null;
       saveWalkSession();
       setMapMode(false);
+      showWalkInfoBox(false);
       setWalkButtonsVisibility({start:!!currentRoute});
       setRouteInfoText(currentRoute?'Ruta disponible. Prem "Iniciar" per començar.':'Genera una ruta per començar.');
     }
@@ -581,8 +633,16 @@
 
     function getLegData(leg){
       if(!currentRouteMetrics)return null;
+      let distKm;
+      if(leg==='outbound'&&currentRouteMetrics.outboundDistM){
+        distKm=currentRouteMetrics.outboundDistM/1000;
+      }else if(leg==='return'&&currentRouteMetrics.returnDistM){
+        distKm=currentRouteMetrics.returnDistM/1000;
+      }else{
+        distKm=currentRouteMetrics.distanceKm/2;
+      }
       return {
-        distanceKm:currentRouteMetrics.distanceKm/2,
+        distanceKm:distKm,
         elevationM:currentRouteMetrics.elevationM/2,
         legName:leg==='outbound'?'anada':'tornada'
       };
@@ -618,15 +678,43 @@
       }
     }
 
+    function showWalkInfoBox(show){
+      if(walkInfoBox)walkInfoBox.classList.toggle('visible',!!show);
+      if(walkExitBtn)walkExitBtn.classList.toggle('visible',!!show);
+    }
+
     function renderActiveWalkStatus(){
       if(!walkSession||!walkSession.activeLeg||!walkSession.startedAt)return;
+      const coords=walkSession.activeLeg==='outbound'?outboundCoordinates:returnCoordinates;
+      let remaining=0;
+      if(coords&&coords.length>1&&userLocation){
+        const idx=findClosestPointIndex(coords,userLocation.lat,userLocation.lng);
+        remaining=Math.round(getRemainingDistance(coords,idx));
+      }else{
+        const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
+        remaining=Math.round(getDistanceToTargetMeters(target));
+      }
+
       const elapsedSeconds=Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
-      const min=Math.floor(elapsedSeconds/60);
-      const sec=(elapsedSeconds%60).toString().padStart(2,'0');
-      const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
-      const remaining=Math.round(getDistanceToTargetMeters(target));
-      const phase=walkSession.activeLeg==='outbound'?'anada':'tornada';
-      setRouteInfoText(`Temps ${phase}: ${min}:${sec} · Distància al punt: ${remaining} m`);
+      let remainingTimeStr='';
+      if(walkSession.initialMeters&&walkSession.initialMeters>0&&elapsedSeconds>20){
+        const covered=walkSession.initialMeters-remaining;
+        if(covered>15){
+          const pace=elapsedSeconds/covered;
+          const rSec=Math.round(Math.max(0,remaining*pace));
+          const rMin=Math.floor(rSec/60);
+          remainingTimeStr=`${rMin}:${(rSec%60).toString().padStart(2,'0')}`;
+        }
+      }
+      if(!remainingTimeStr){
+        const rSec=Math.round(remaining/(5000/3600));
+        const rMin=Math.floor(rSec/60);
+        remainingTimeStr=`~${rMin}:${(rSec%60).toString().padStart(2,'0')}`;
+      }
+
+      if(walkInfoTime)walkInfoTime.textContent=remainingTimeStr;
+      if(walkInfoDistance)walkInfoDistance.textContent=`${remaining} m`;
+      showWalkInfoBox(true);
     }
 
     function startWalkTimer(){
@@ -640,6 +728,7 @@
       const leg=walkSession.activeLeg;
       const endedAt=Date.now();
       const elapsedSeconds=Math.max(0,Math.floor((endedAt-walkSession.startedAt)/1000));
+      showWalkInfoBox(false);
       if(leg==='outbound'){
         walkSession.outboundElapsedSeconds=elapsedSeconds;
         walkSession.activeLeg=null;
@@ -689,10 +778,12 @@
       setMapMode(!!walkSession);
       if(!walkSession){
         setWalkButtonsVisibility({start:!!currentRoute});
+        showWalkInfoBox(false);
         return;
       }
       if(walkSession.activeLeg==='outbound'){
         setWalkButtonsVisibility({});
+        showWalkInfoBox(true);
         ensureWalkWatcher();
         return;
       }
@@ -706,6 +797,10 @@
       }
       if(walkSession.activeLeg==='return'){
         setWalkButtonsVisibility({});
+        showWalkInfoBox(true);
+        if(returnCoordinates&&returnCoordinates.length>=2){
+          sendRouteToNative(returnCoordinates);
+        }
         ensureWalkWatcher();
         return;
       }
@@ -732,7 +827,7 @@
       for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=simplified&geometries=geojson`;
+        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
         try{
           debugLog(`Iniciant fetch a OSRM... ${baseUrl}`);
           const response=await fetch(url,{signal:controller.signal});
@@ -777,6 +872,56 @@
         }
         return gain;
       }catch(_){return 0;}
+    }
+
+    async function fetchRouteWithWaypoint(start,waypoint,end){
+      let lastError=null;
+      for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
+        const controller=new AbortController();
+        const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
+        const url=`${baseUrl}/${start.lng},${start.lat};${waypoint.lng},${waypoint.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+        try{
+          const response=await fetch(url,{signal:controller.signal});
+          if(!response.ok)throw new Error(`OSRM ${response.status}`);
+          const data=await response.json();
+          if(data&&Array.isArray(data.routes)&&data.routes.length)return data;
+          throw new Error('Resposta buida');
+        }catch(err){lastError=err;}finally{clearTimeout(timeoutId);}
+      }
+      throw lastError||new Error('No s\'ha pogut obtenir ruta de tornada');
+    }
+
+    async function generateReturnRoute(destination,origin){
+      const dlat=origin.lat-destination.lat;
+      const dlng=origin.lng-destination.lng;
+      const dist=Math.sqrt(dlat*dlat+dlng*dlng);
+
+      if(dist>0.00001){
+        const midLat=(destination.lat+origin.lat)/2;
+        const midLng=(destination.lng+origin.lng)/2;
+        const offset=0.003;
+        const sign=Math.random()>0.5?1:-1;
+        const waypoint={
+          lat:midLat+sign*(-dlng/dist)*offset,
+          lng:midLng+sign*(dlat/dist)*offset
+        };
+        try{
+          debugLog('Generant ruta de tornada amb waypoint alternatiu...');
+          const data=await fetchRouteWithWaypoint(destination,waypoint,origin);
+          debugLog(`Ruta de tornada obtinguda: ${data.routes[0].geometry.coordinates.length} punts`);
+          return data.routes[0].geometry.coordinates;
+        }catch(err){
+          debugLog(`Ruta amb waypoint fallida, provant directa: ${(err&&err.message)||err}`);
+        }
+      }
+
+      try{
+        const data=await fetchRouteWithOsrm(destination,origin);
+        return data.routes[0].geometry.coordinates;
+      }catch(err){
+        debugLog(`Ruta de tornada directa fallida: ${(err&&err.message)||err}`);
+        return null;
+      }
     }
 
     const MAX_ROUTE_ATTEMPTS=8;
@@ -870,11 +1015,31 @@
       userLocation={lat,lng};
       clearLocationTimeout();
       if(walkSession&&walkSession.activeLeg){
+        const coords=walkSession.activeLeg==='outbound'?outboundCoordinates:returnCoordinates;
         const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
-        if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
-          completeCurrentLegByArrival();
-          return;
+
+        if(coords&&coords.length>1){
+          const closestIdx=findClosestPointIndex(coords,lat,lng);
+          const remaining=getRemainingDistance(coords,closestIdx);
+
+          if(remaining<=ARRIVAL_THRESHOLD_M||getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
+            completeCurrentLegByArrival();
+            return;
+          }
+
+          if(closestIdx>0){
+            const remainingCoords=coords.slice(closestIdx);
+            if(remainingCoords.length>=2){
+              updateRouteOnMap(remainingCoords);
+            }
+          }
+        }else{
+          if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
+            completeCurrentLegByArrival();
+            return;
+          }
         }
+
         renderActiveWalkStatus();
         return;
       }
@@ -960,18 +1125,26 @@
       try{
         const routeResult=await generateRouteFromLocation(userLocation);
         const route=routeResult.data.routes[0];
-        const totalDistanceKm=(route.distance*2)/1000;
         const coords=route.geometry&&route.geometry.coordinates||[];
+
+        outboundCoordinates=coords;
+        currentRoute={start:userLocation,end:routeResult.destination};
+        previousDestination=routeResult.destination;
+
+        setRouteInfoText('Calculant ruta de tornada...');
+        const retCoords=await generateReturnRoute(routeResult.destination,userLocation);
+        returnCoordinates=retCoords||[...coords].reverse();
+
+        const outboundDistM=calculatePolylineDistance(outboundCoordinates);
+        const returnDistM=calculatePolylineDistance(returnCoordinates);
+        const totalDistanceKm=(outboundDistM+returnDistM)/1000;
+
         const totalPositiveGainM=await fetchElevationGain(coords);
         const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
-        currentRoute={start:userLocation,end:routeResult.destination};
-        previousDestination=routeResult.destination;
-        currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
-        const geometry=route.geometry;
-        if(geometry&&Array.isArray(geometry.coordinates)){
-          sendRouteToNative(geometry.coordinates);
-        }
+        currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
+        sendRouteToNative(outboundCoordinates);
+
         walkSession=null;
         saveWalkSession();
         localStorage.setItem('wisewalk-last-origin',JSON.stringify(userLocation));
@@ -983,7 +1156,7 @@
 
         routeDetails.style.display='flex';
         setWalkButtonsVisibility({start:true});
-        setRouteInfoText('Ruta generada (3 km aprox.) amb arribada en camí/carrer accessible.');
+        setRouteInfoText('Ruta generada amb camí d\'anada i tornada diferent.');
       }catch(err){
         debugLog('Error a generateRandomRoute');
         debugLog((err&&err.stack)||err);
@@ -1005,6 +1178,7 @@
         setRouteInfoText('Primer genera una ruta.');
         return;
       }
+      const initialM=outboundCoordinates?calculatePolylineDistance(outboundCoordinates):0;
       walkSession={
         origin:{lat:currentRoute.start.lat,lng:currentRoute.start.lng},
         destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
@@ -1013,25 +1187,32 @@
         outboundElapsedSeconds:null,
         returnElapsedSeconds:null,
         outboundClaimed:false,
-        returnClaimed:false
+        returnClaimed:false,
+        initialMeters:Math.round(initialM)
       };
       setMapMode(true);
       saveWalkSession();
       localStorage.setItem('wisewalk-last-origin',JSON.stringify(walkSession.origin));
       setWalkButtonsVisibility({});
+      showWalkInfoBox(true);
       ensureWalkWatcher();
     }
 
     function claimOutboundReward(){
       if(!walkSession||walkSession.outboundElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
-      const legKm=currentRouteMetrics?currentRouteMetrics.distanceKm/2:0;
+      const legKm=currentRouteMetrics?(currentRouteMetrics.outboundDistM||currentRouteMetrics.distanceKm*500)/1000:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
       walkSession.outboundClaimed=true;
       saveWalkSession();
+
+      if(returnCoordinates&&returnCoordinates.length>=2){
+        sendRouteToNative(returnCoordinates);
+      }
+
       setWalkButtonsVisibility({returnOrigin:true});
-      setRouteInfoText(`Anada reclamada: ${burnedKcal} kcal descomptades de l'objectiu diari.`);
+      setRouteInfoText(`Anada reclamada: ${burnedKcal} kcal. Prem per iniciar la tornada.`);
     }
 
     function startReturnWalk(){
@@ -1039,17 +1220,23 @@
         setRouteInfoText('No s\'ha trobat el punt d\'origen desat.');
         return;
       }
+      const initialM=returnCoordinates?calculatePolylineDistance(returnCoordinates):0;
       walkSession.activeLeg='return';
       walkSession.startedAt=Date.now();
+      walkSession.initialMeters=Math.round(initialM);
       saveWalkSession();
+      if(returnCoordinates&&returnCoordinates.length>=2){
+        sendRouteToNative(returnCoordinates);
+      }
       setWalkButtonsVisibility({});
+      showWalkInfoBox(true);
       ensureWalkWatcher();
     }
 
     function claimReturnReward(){
       if(!walkSession||walkSession.returnElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('return',walkSession.returnElapsedSeconds);
-      const legKm=currentRouteMetrics?currentRouteMetrics.distanceKm/2:0;
+      const legKm=currentRouteMetrics?(currentRouteMetrics.returnDistM||currentRouteMetrics.distanceKm*500)/1000:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
       walkSession.returnClaimed=true;
@@ -1057,6 +1244,7 @@
       setRouteInfoText(`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`);
       walkSession=null;
       setMapMode(false);
+      showWalkInfoBox(false);
       saveWalkSession();
       stopWalkTimer();
       stopWalkWatcher();
@@ -1276,6 +1464,7 @@
     btnReturnOrigin.addEventListener('click',startReturnWalk);
     btnClaimReturn.addEventListener('click',claimReturnReward);
     btnExitMap.addEventListener('click',exitMapMode);
+    walkExitBtn.addEventListener('click',exitMapMode);
     btnDebugSimulate.addEventListener('click',simulateRouteAndLocation);
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
