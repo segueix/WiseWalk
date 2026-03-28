@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var rotationSensor: Sensor? = null
     private lateinit var myLocationOverlay: MyLocationNewOverlay
     private var routePolyline: Polyline? = null
+    private var destinationMarker: PulsingMarkerOverlay? = null
     private var isProgrammaticMapMove: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -189,6 +190,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 myLocationOverlay.enableFollowLocation()
             }
         }
+        destinationMarker?.startAnimation(mapView)
         if (isWalkGpsModeActive && isCompassEnabled) {
             rotationSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
@@ -200,6 +202,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onPause()
         mapView.onPause()
         if (::myLocationOverlay.isInitialized) myLocationOverlay.disableMyLocation()
+        destinationMarker?.stopAnimation()
         sensorManager.unregisterListener(this)
     }
 
@@ -484,6 +487,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         routePolyline = polyline
                         mapView.overlays.add(polyline)
 
+                        // Add pulsing destination marker at last point
+                        destinationMarker?.stopAnimation()
+                        val marker = PulsingMarkerOverlay(points.last())
+                        destinationMarker = marker
+                        mapView.overlays.add(marker)
+                        marker.startAnimation(mapView)
+
                         if (mapView.width > 0 && mapView.height > 0) {
                             isProgrammaticMapMove = true
                             val boundingBox = BoundingBox.fromGeoPoints(points)
@@ -524,6 +534,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     try {
                         routePolyline?.let { polyline ->
                             polyline.setPoints(points)
+                            // Update destination marker position to last point
+                            destinationMarker?.setPosition(points.last())
                             mapView.invalidate()
                         } ?: run {
                             val polyline = Polyline().apply {
@@ -781,6 +793,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.mapView.visibility = View.GONE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
                     activity.mapView.mapOrientation = 0f
+                    activity.destinationMarker?.stopAnimation()
                 }
             }
         }
