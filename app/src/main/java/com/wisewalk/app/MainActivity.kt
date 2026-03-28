@@ -265,16 +265,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
-                if (event?.isUserAction == true) {
-                    myLocationOverlay.disableFollowLocation()
-                }
+                myLocationOverlay.disableFollowLocation()
                 return false
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                if (event?.isUserAction == true) {
-                    myLocationOverlay.disableFollowLocation()
-                }
+                myLocationOverlay.disableFollowLocation()
                 return false
             }
         })
