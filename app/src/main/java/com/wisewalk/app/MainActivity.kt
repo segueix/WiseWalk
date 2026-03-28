@@ -325,8 +325,12 @@ class MainActivity : AppCompatActivity() {
                         }
                         mapView.overlays.add(polyline)
 
-                        val boundingBox = BoundingBox.fromGeoPoints(points)
-                        mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
+                        // Només fer zoom si el mapa és visible físicament
+                        if (mapView.width > 0 && mapView.height > 0) {
+                            val boundingBox = BoundingBox.fromGeoPoints(points)
+                            mapView.zoomToBoundingBox(boundingBox, false, (resources.displayMetrics.density * 72).toInt())
+                        }
+                        
                         mapView.invalidate()
                         Log.d("WiseWalk", "drawRoute: ruta dibuixada amb ${points.size} punts")
                     } catch (e: Throwable) {
