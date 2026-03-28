@@ -717,7 +717,7 @@
     const TARGET_TOTAL_DISTANCE_KM=3.0;
     const TARGET_OUTBOUND_DISTANCE_M=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
     const DISTANCE_TOLERANCE_KM=0.4;
-    const URBAN_TORTUOSITY_FACTOR=1.4;
+    const URBAN_TORTUOSITY_FACTOR=1.15;
 
     const OSRM_ROUTE_ENDPOINTS=[
       'https://router.project-osrm.org/route/v1/foot',
@@ -784,6 +784,9 @@
       let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M/URBAN_TORTUOSITY_FACTOR;
       let chosenData=null;
       let chosenDestination=null;
+      let bestData=null;
+      let bestDestination=null;
+      let bestDiff=Infinity;
       let lastRouteError=null;
       const globalDeadline=Date.now()+GLOBAL_ROUTE_TIMEOUT_MS;
 
@@ -816,8 +819,15 @@
         if(typeof route.distance!=='number')continue;
 
         const totalDistanceKm=(route.distance*2)/1000;
+        const currentDiff=Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM);
+        if(currentDiff<bestDiff){
+          bestDiff=currentDiff;
+          bestData=data;
+          const geom=route.geometry.coordinates;
+          bestDestination={lat:geom[geom.length-1][1],lng:geom[geom.length-1][0]};
+        }
         debugLog(`Intent ${attempt+1}: distància total ${totalDistanceKm.toFixed(2)} km (objectiu ${TARGET_TOTAL_DISTANCE_KM} ±${DISTANCE_TOLERANCE_KM})`);
-        if(Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM)<=DISTANCE_TOLERANCE_KM){
+        if(currentDiff<=DISTANCE_TOLERANCE_KM){
           const geometry=route.geometry;
           const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
             ?geometry.coordinates[geometry.coordinates.length-1]
@@ -834,16 +844,22 @@
         const correctionRatio=targetOutboundM/actualOutboundM;
         targetDistanceMeters=targetDistanceMeters*correctionRatio;
         const minRadius=300;
-        const maxRadius=TARGET_OUTBOUND_DISTANCE_M;
+        const maxRadius=TARGET_OUTBOUND_DISTANCE_M*1.5;
         if(targetDistanceMeters<minRadius)targetDistanceMeters=minRadius;
         if(targetDistanceMeters>maxRadius)targetDistanceMeters=maxRadius;
       }
 
       if(!chosenData||!chosenDestination){
-        if(lastRouteError){
-          throw new Error(lastRouteError.message||'No s\'ha pogut contactar amb OpenStreetMap per generar la ruta.');
+        if(bestData&&bestDestination){
+          chosenData=bestData;
+          chosenDestination=bestDestination;
+          debugLog(`Acceptant la millor ruta trobada com a fallback (Diff: ${bestDiff.toFixed(2)} km)`);
+        }else{
+          if(lastRouteError){
+            throw new Error(lastRouteError.message||'No s\'ha pogut contactar amb OpenStreetMap per generar la ruta.');
+          }
+          throw new Error('No s\'ha pogut generar cap ruta vàlida. Torna-ho a provar.');
         }
-        throw new Error('No s\'ha pogut generar una ruta de 3 km dins del rang desitjat. Torna-ho a provar.');
       }
       return {data:chosenData,destination:chosenDestination};
     }
