@@ -28,6 +28,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.view.View
+import android.widget.ImageButton
 import android.widget.Toast
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -40,6 +41,9 @@ import com.wisewalk.app.databinding.ActivityMainBinding
 import org.json.JSONArray
 import org.json.JSONObject
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -65,6 +69,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
     private lateinit var myLocationOverlay: MyLocationNewOverlay
+    private var routePolyline: Polyline? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -171,7 +176,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         mapView.onResume()
-        if (::myLocationOverlay.isInitialized) myLocationOverlay.enableMyLocation()
+        if (::myLocationOverlay.isInitialized) {
+            myLocationOverlay.enableMyLocation()
+            myLocationOverlay.enableFollowLocation()
+        }
         if (isWalkGpsModeActive) {
             rotationSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
@@ -221,15 +229,59 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView = binding.mapView
         mapView.setTileSource(TileSourceFactory.MAPNIK)
         mapView.setMultiTouchControls(true)
-        mapView.setBuiltInZoomControls(true)
+        mapView.setBuiltInZoomControls(false)
         mapView.controller.setZoom(15.0)
 
         myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), mapView)
         myLocationOverlay.enableMyLocation()
+        myLocationOverlay.enableFollowLocation()
         mapView.overlays.add(myLocationOverlay)
+
+        findViewById<ImageButton>(R.id.btn_zoom_in).setOnClickListener {
+            mapView.controller.zoomIn()
+        }
+        findViewById<ImageButton>(R.id.btn_zoom_out).setOnClickListener {
+            mapView.controller.zoomOut()
+        }
+        findViewById<ImageButton>(R.id.btn_center_me).setOnClickListener {
+            myLocationOverlay.enableFollowLocation()
+            myLocationOverlay.myLocation?.let { currentLocation ->
+                mapView.controller.animateTo(currentLocation, 18.0, 500)
+            }
+        }
+        findViewById<ImageButton>(R.id.btn_show_route).setOnClickListener {
+            routePolyline?.let { polyline ->
+                if (polyline.points.isNotEmpty()) {
+                    myLocationOverlay.disableFollowLocation()
+                    val boundingBox = BoundingBox.fromGeoPoints(polyline.points)
+                    mapView.zoomToBoundingBox(
+                        boundingBox,
+                        true,
+                        (resources.displayMetrics.density * 50).toInt()
+                    )
+                }
+            }
+        }
+
+        mapView.addMapListener(object : MapListener {
+            override fun onScroll(event: ScrollEvent?): Boolean {
+                if (event?.isUserAction == true) {
+                    myLocationOverlay.disableFollowLocation()
+                }
+                return false
+            }
+
+            override fun onZoom(event: ZoomEvent?): Boolean {
+                if (event?.isUserAction == true) {
+                    myLocationOverlay.disableFollowLocation()
+                }
+                return false
+            }
+        })
     }
 
     private fun requestLocationPermission() {
+
         ActivityCompat.requestPermissions(
             this,
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
@@ -350,6 +402,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                             outlinePaint.color = Color.parseColor("#2E7D32")
                             outlinePaint.strokeWidth = 12f
                         }
+                        routePolyline = polyline
                         mapView.overlays.add(polyline)
 
                         // Només fer zoom si el mapa és visible físicament
@@ -370,9 +423,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun animateCameraForWalkMode(lat: Double, lng: Double, @Suppress("UNUSED_PARAMETER") bearing: Float) {
-        val point = GeoPoint(lat, lng)
-        mapView.controller.animateTo(point, 18.0, 800)
+    private fun animateCameraForWalkMode(@Suppress("UNUSED_PARAMETER") lat: Double, @Suppress("UNUSED_PARAMETER") lng: Double, @Suppress("UNUSED_PARAMETER") bearing: Float) {
+        // Control de càmera delegat a MyLocationNewOverlay.enableFollowLocation().
     }
 
     private fun updateGoalFromProfile(json: String) {
@@ -588,6 +640,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
                 activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
+                activity.findViewById<View>(R.id.mapControlsContainer).visibility = if (enabled) View.VISIBLE else View.GONE
                 if (!enabled) {
                     activity.mapView.mapOrientation = 0f
                 }
