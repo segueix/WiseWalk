@@ -113,6 +113,11 @@
     .address-suggestion:hover,.address-suggestion:active{background:var(--accent-light)}
     .address-clear-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--text-soft);display:none;padding:4px}
     .address-clear-btn.visible{display:block}
+    .address-gps-btn{width:100%;padding:.7rem;margin-top:.5rem;background:var(--accent-light);color:var(--accent);border:2px dashed var(--accent);border-radius:12px;font-size:.9rem;font-weight:500;font-family:'Roboto Flex',sans-serif;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.4rem}
+    .address-gps-btn:active{transform:scale(.98);background:var(--accent);color:#fff}
+    .address-gps-btn.saved{border-style:solid;background:var(--accent);color:#fff}
+    .address-status{font-size:.75rem;color:var(--text-soft);margin-top:.35rem}
+    .address-status.has-location{color:var(--accent);font-weight:500}
     body.map-mode .walk-exit-btn.visible{display:block}
     body.map-mode .walk-info-box.visible{display:block}
   </style>
@@ -153,13 +158,15 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="address-setup">📍 Adreça d'inici de ruta (opcional)</label>
-            <div class="address-wrapper">
-              <input type="text" id="address-setup" class="address-input" placeholder="Escriu la teva adreça..." autocomplete="off">
+            <label>📍 Punt d'inici de ruta (opcional)</label>
+            <button type="button" class="address-gps-btn" id="address-gps-setup">📡 Usar la meva ubicació actual</button>
+            <div class="address-status" id="address-status-setup">Les rutes començaran des del GPS en temps real.</div>
+            <div style="margin:.5rem 0 0;font-size:.8rem;color:var(--text-soft);text-align:center">— o cerca una adreça —</div>
+            <div class="address-wrapper" style="margin-top:.4rem">
+              <input type="text" id="address-setup" class="address-input" placeholder="Escriu carrer, número, ciutat..." autocomplete="off">
               <button type="button" class="address-clear-btn" id="address-clear-setup" title="Esborrar">✕</button>
               <div class="address-suggestions" id="address-suggestions-setup"></div>
             </div>
-            <div style="font-size:.75rem;color:var(--text-soft);margin-top:.35rem">Les rutes començaran des d'aquesta adreça. Deixa buit per usar el GPS.</div>
           </div>
           <button type="submit" class="btn">Continuar</button>
         </form>
@@ -254,13 +261,15 @@
         </div>
         <form id="form-config">
           <div class="form-group">
-            <label for="address-config">📍 Adreça d'inici de ruta</label>
-            <div class="address-wrapper">
-              <input type="text" id="address-config" class="address-input" placeholder="Escriu la teva adreça..." autocomplete="off">
+            <label>📍 Punt d'inici de ruta</label>
+            <button type="button" class="address-gps-btn" id="address-gps-config">📡 Usar la meva ubicació actual</button>
+            <div class="address-status" id="address-status-config">Les rutes començaran des del GPS en temps real.</div>
+            <div style="margin:.5rem 0 0;font-size:.8rem;color:var(--text-soft);text-align:center">— o cerca una adreça —</div>
+            <div class="address-wrapper" style="margin-top:.4rem">
+              <input type="text" id="address-config" class="address-input" placeholder="Escriu carrer, número, ciutat..." autocomplete="off">
               <button type="button" class="address-clear-btn" id="address-clear-config" title="Esborrar">✕</button>
               <div class="address-suggestions" id="address-suggestions-config"></div>
             </div>
-            <div style="font-size:.75rem;color:var(--text-soft);margin-top:.35rem">Les rutes començaran des d'aquesta adreça. Deixa buit per usar el GPS.</div>
           </div>
           <div class="form-group"><label>Sexe</label><div class="sex-selector"><div class="sex-option"><input type="radio" name="sex-config" id="sex-m-config" value="M" checked><label for="sex-m-config"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div><div class="sex-option"><input type="radio" name="sex-config" id="sex-f-config" value="F"><label for="sex-f-config"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div></div></div>
           <div class="form-group"><label for="age-config">Edat</label><div class="input-wrapper"><input type="number" id="age-config" inputmode="numeric" min="5" max="120" required><span class="unit">anys</span></div></div>
@@ -347,7 +356,7 @@
     const ARRIVAL_THRESHOLD_M=35;
     const SNAP_DEVIATION_THRESHOLD_M=20;
 
-    /* ---- Address autocomplete with Nominatim ---- */
+    /* ---- Home location (GPS or address) ---- */
     let addressDebounceTimer=null;
     let selectedAddress=JSON.parse(localStorage.getItem('wisewalk-home-address')||'null');
 
@@ -355,6 +364,68 @@
       selectedAddress=addr;
       if(addr)localStorage.setItem('wisewalk-home-address',JSON.stringify(addr));
       else localStorage.removeItem('wisewalk-home-address');
+      updateAllAddressStatusUi();
+    }
+
+    function updateAddressStatusUi(suffix){
+      const statusEl=document.getElementById('address-status-'+suffix);
+      const gpsBtn=document.getElementById('address-gps-'+suffix);
+      const addrInput=document.getElementById('address-'+suffix);
+      const clearBtn=document.getElementById('address-clear-'+suffix);
+      if(!statusEl)return;
+      if(selectedAddress&&selectedAddress.source==='gps'){
+        statusEl.textContent=`Ubicació guardada (${selectedAddress.lat.toFixed(5)}, ${selectedAddress.lng.toFixed(5)})`;
+        statusEl.classList.add('has-location');
+        if(gpsBtn){gpsBtn.textContent='📡 Ubicació guardada';gpsBtn.classList.add('saved');}
+        if(addrInput)addrInput.value='';
+        if(clearBtn)clearBtn.classList.remove('visible');
+      }else if(selectedAddress&&selectedAddress.source==='address'){
+        statusEl.textContent=`Adreça: ${selectedAddress.displayName}`;
+        statusEl.classList.add('has-location');
+        if(gpsBtn){gpsBtn.textContent='📡 Usar la meva ubicació actual';gpsBtn.classList.remove('saved');}
+        if(addrInput)addrInput.value=selectedAddress.displayName;
+        if(clearBtn)clearBtn.classList.add('visible');
+      }else{
+        statusEl.textContent='Les rutes començaran des del GPS en temps real.';
+        statusEl.classList.remove('has-location');
+        if(gpsBtn){gpsBtn.textContent='📡 Usar la meva ubicació actual';gpsBtn.classList.remove('saved');}
+        if(addrInput)addrInput.value='';
+        if(clearBtn)clearBtn.classList.remove('visible');
+      }
+    }
+
+    function updateAllAddressStatusUi(){
+      updateAddressStatusUi('setup');
+      updateAddressStatusUi('config');
+    }
+
+    function captureGpsAsHome(){
+      const statusSetup=document.getElementById('address-status-setup');
+      const statusConfig=document.getElementById('address-status-config');
+      const setStatus=(text)=>{
+        if(statusSetup)statusSetup.textContent=text;
+        if(statusConfig)statusConfig.textContent=text;
+      };
+      setStatus('Obtenint ubicació GPS...');
+
+      /* Try native bridge first */
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
+        window._pendingGpsCapture=true;
+        WiseWalkAndroid.getLocation();
+        return;
+      }
+      /* Fallback to browser geolocation */
+      if(!('geolocation' in navigator)){
+        setStatus('Geolocalització no disponible.');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos=>{
+          saveHomeAddress({source:'gps',lat:pos.coords.latitude,lng:pos.coords.longitude,displayName:null});
+        },
+        err=>{setStatus('Error GPS: '+err.message);},
+        {enableHighAccuracy:true,timeout:15000}
+      );
     }
 
     function setupAddressAutocomplete(inputId,suggestionsId,clearBtnId){
@@ -365,7 +436,7 @@
 
       input.addEventListener('input',()=>{
         const q=input.value.trim();
-        clearBtn.classList.toggle('visible',q.length>0);
+        if(clearBtn)clearBtn.classList.toggle('visible',q.length>0);
         if(q.length<3){sugBox.classList.remove('visible');sugBox.innerHTML='';return;}
         clearTimeout(addressDebounceTimer);
         addressDebounceTimer=setTimeout(()=>fetchAddressSuggestions(q,sugBox,input),400);
@@ -404,7 +475,7 @@
           div.textContent=r.display_name;
           div.addEventListener('click',()=>{
             input.value=r.display_name;
-            saveHomeAddress({displayName:r.display_name,lat:parseFloat(r.lat),lng:parseFloat(r.lon)});
+            saveHomeAddress({source:'address',displayName:r.display_name,lat:parseFloat(r.lat),lng:parseFloat(r.lon)});
             sugBox.classList.remove('visible');
             document.getElementById(input.id.replace('address-','address-clear-')).classList.add('visible');
           });
@@ -567,16 +638,7 @@
       document.getElementById('wake-config').value=profile.wakeTime;
       document.getElementById('sleep-config').value=profile.sleepTime;
       document.getElementById(profile.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
-      /* Restore address in config form */
-      const addrInput=document.getElementById('address-config');
-      const addrClear=document.getElementById('address-clear-config');
-      if(selectedAddress&&selectedAddress.displayName){
-        addrInput.value=selectedAddress.displayName;
-        addrClear.classList.add('visible');
-      }else{
-        addrInput.value='';
-        addrClear.classList.remove('visible');
-      }
+      updateAddressStatusUi('config');
       updateConfigSummary();
       updateCalorieGoals();
     }
@@ -1615,6 +1677,12 @@
     }
 
     window.wiseWalkSetLocation=function(lat,lng){
+      /* Intercept if GPS capture for home address is pending */
+      if(window._pendingGpsCapture){
+        window._pendingGpsCapture=false;
+        saveHomeAddress({source:'gps',lat:lat,lng:lng,displayName:null});
+        return;
+      }
       setRouteUserLocation(lat,lng);
     };
 
@@ -1642,6 +1710,8 @@
       showScreen('config');
     });
     btnBack.addEventListener('click',()=>showScreen('main'));
+    document.getElementById('address-gps-setup').addEventListener('click',captureGpsAsHome);
+    document.getElementById('address-gps-config').addEventListener('click',captureGpsAsHome);
     btnGenerateRoute.addEventListener('click',generateRandomRoute);
     btnOpenMaps.addEventListener('click',openInGoogleMaps);
     btnStartWalk.addEventListener('click',startOutboundWalk);
@@ -1681,21 +1751,10 @@
     setColorTheme(localStorage.getItem('wisewalk-color')||'green');
     updateConfigSummary();
 
-    /* Init address autocomplete */
+    /* Init address autocomplete + GPS button */
     setupAddressAutocomplete('address-config','address-suggestions-config','address-clear-config');
     setupAddressAutocomplete('address-setup','address-suggestions-setup','address-clear-setup');
-
-    /* Restore saved address into inputs */
-    if(selectedAddress&&selectedAddress.displayName){
-      const acfg=document.getElementById('address-config');
-      const asetup=document.getElementById('address-setup');
-      if(acfg)acfg.value=selectedAddress.displayName;
-      if(asetup)asetup.value=selectedAddress.displayName;
-      const cc=document.getElementById('address-clear-config');
-      const cs=document.getElementById('address-clear-setup');
-      if(cc)cc.classList.add('visible');
-      if(cs)cs.classList.add('visible');
-    }
+    updateAllAddressStatusUi();
 
     /* Restore route coordinates for screen-off survival */
     restoreRouteCoordinates();
