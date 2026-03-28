@@ -70,6 +70,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var rotationSensor: Sensor? = null
     private lateinit var myLocationOverlay: MyLocationNewOverlay
     private var routePolyline: Polyline? = null
+    private var isProgrammaticMapMove: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -178,7 +179,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.onResume()
         if (::myLocationOverlay.isInitialized) {
             myLocationOverlay.enableMyLocation()
-            myLocationOverlay.enableFollowLocation()
+            // Only re-enable follow if in walk GPS mode; otherwise respect user's manual scroll
+            if (isWalkGpsModeActive) {
+                myLocationOverlay.enableFollowLocation()
+            }
         }
         if (isWalkGpsModeActive) {
             rotationSensor?.let {
@@ -230,7 +234,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.setTileSource(TileSourceFactory.MAPNIK)
         mapView.setMultiTouchControls(true)
         mapView.setBuiltInZoomControls(false)
+        mapView.minZoomLevel = 3.0
+        mapView.maxZoomLevel = 20.0
         mapView.controller.setZoom(15.0)
+        mapView.isHorizontalMapRepetitionEnabled = false
+        mapView.isVerticalMapRepetitionEnabled = false
 
         myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), mapView)
         myLocationOverlay.enableMyLocation()
@@ -238,42 +246,116 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.overlays.add(myLocationOverlay)
 
         findViewById<ImageButton>(R.id.btn_zoom_in).setOnClickListener {
-            mapView.controller.zoomIn()
+            try {
+                val currentZoom = mapView.zoomLevelDouble
+                if (currentZoom < mapView.maxZoomLevel) {
+                    isProgrammaticMapMove = true
+                    mapView.controller.animateTo(
+                        mapView.mapCenter,
+                        (currentZoom + 1.0).coerceAtMost(mapView.maxZoomLevel),
+                        300L
+                    )
+                    mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
+                }
+            } catch (e: Exception) {
+                Log.w("WiseWalk", "Error during zoom in", e)
+                isProgrammaticMapMove = false
+            }
         }
         findViewById<ImageButton>(R.id.btn_zoom_out).setOnClickListener {
-            mapView.controller.zoomOut()
+            try {
+                val currentZoom = mapView.zoomLevelDouble
+                if (currentZoom > mapView.minZoomLevel) {
+                    isProgrammaticMapMove = true
+                    mapView.controller.animateTo(
+                        mapView.mapCenter,
+                        (currentZoom - 1.0).coerceAtLeast(mapView.minZoomLevel),
+                        300L
+                    )
+                    mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
+                }
+            } catch (e: Exception) {
+                Log.w("WiseWalk", "Error during zoom out", e)
+                isProgrammaticMapMove = false
+            }
         }
         findViewById<ImageButton>(R.id.btn_center_me).setOnClickListener {
-            myLocationOverlay.enableFollowLocation()
-            myLocationOverlay.myLocation?.let { currentLocation ->
-                mapView.controller.animateTo(currentLocation, 18.0, 500)
+            try {
+                isProgrammaticMapMove = true
+                myLocationOverlay.enableFollowLocation()
+                val loc = myLocationOverlay.myLocation
+                if (loc != null) {
+                    mapView.controller.animateTo(loc, 18.0, 500L)
+                } else {
+                    // No cached location yet – request a fresh fix and center when it arrives
+                    getCurrentLocationAndCenter()
+                }
+                mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+            } catch (e: Exception) {
+                Log.w("WiseWalk", "Error centering map", e)
+                isProgrammaticMapMove = false
             }
         }
         findViewById<ImageButton>(R.id.btn_show_route).setOnClickListener {
             routePolyline?.let { polyline ->
                 if (polyline.points.isNotEmpty()) {
-                    myLocationOverlay.disableFollowLocation()
-                    val boundingBox = BoundingBox.fromGeoPoints(polyline.points)
-                    mapView.zoomToBoundingBox(
-                        boundingBox,
-                        true,
-                        (resources.displayMetrics.density * 50).toInt()
-                    )
+                    try {
+                        isProgrammaticMapMove = true
+                        myLocationOverlay.disableFollowLocation()
+                        val boundingBox = BoundingBox.fromGeoPoints(polyline.points)
+                        if (mapView.width > 0 && mapView.height > 0) {
+                            mapView.zoomToBoundingBox(
+                                boundingBox,
+                                true,
+                                (resources.displayMetrics.density * 50).toInt()
+                            )
+                        }
+                        mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+                    } catch (e: Exception) {
+                        Log.w("WiseWalk", "Error showing route bounds", e)
+                        isProgrammaticMapMove = false
+                    }
                 }
             }
         }
 
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
-                myLocationOverlay.disableFollowLocation()
+                if (!isProgrammaticMapMove) {
+                    myLocationOverlay.disableFollowLocation()
+                }
                 return false
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                myLocationOverlay.disableFollowLocation()
+                if (!isProgrammaticMapMove) {
+                    myLocationOverlay.disableFollowLocation()
+                }
                 return false
             }
         })
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun getCurrentLocationAndCenter() {
+        if (!hasLocationPermission()) {
+            requestLocationPermission()
+            return
+        }
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                location?.let {
+                    val geoPoint = GeoPoint(it.latitude, it.longitude)
+                    isProgrammaticMapMove = true
+                    myLocationOverlay.enableFollowLocation()
+                    mapView.controller.animateTo(geoPoint, 18.0, 500L)
+                    mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+                    sendLocationToWeb(it.latitude, it.longitude)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("WiseWalk", "Error getting location for centering", e)
+        }
     }
 
     private fun requestLocationPermission() {
@@ -403,8 +485,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                         // Només fer zoom si el mapa és visible físicament
                         if (mapView.width > 0 && mapView.height > 0) {
+                            isProgrammaticMapMove = true
                             val boundingBox = BoundingBox.fromGeoPoints(points)
-                            mapView.zoomToBoundingBox(boundingBox, false, (resources.displayMetrics.density * 72).toInt())
+                            mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
+                            mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
                         }
                         
                         mapView.invalidate()
@@ -635,9 +719,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         @JavascriptInterface
         fun setMapModeNative(enabled: Boolean) {
             activity.runOnUiThread {
-                activity.mapView.visibility = if (enabled) View.VISIBLE else View.GONE
-                activity.findViewById<View>(R.id.mapControlsContainer).visibility = if (enabled) View.VISIBLE else View.GONE
-                if (!enabled) {
+                if (enabled) {
+                    activity.mapView.visibility = View.VISIBLE
+                    activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.VISIBLE
+                    // Ensure map is properly resumed and location overlay active
+                    activity.mapView.onResume()
+                    if (activity::myLocationOverlay.isInitialized) {
+                        activity.myLocationOverlay.enableMyLocation()
+                        activity.myLocationOverlay.enableFollowLocation()
+                    }
+                    activity.mapView.invalidate()
+                } else {
+                    activity.mapView.visibility = View.GONE
+                    activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
                     activity.mapView.mapOrientation = 0f
                 }
             }
