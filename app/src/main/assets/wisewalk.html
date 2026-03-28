@@ -730,7 +730,7 @@
       for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=simplified&geometries=geojson`;
         try{
           debugLog(`Iniciant fetch a OSRM... ${baseUrl}`);
           const response=await fetch(url,{signal:controller.signal});
