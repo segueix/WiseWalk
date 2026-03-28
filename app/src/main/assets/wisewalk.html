@@ -1062,12 +1062,22 @@
     ];
     const ROUTE_REQUEST_TIMEOUT_MS=12000;
 
+    function buildOsrmRadiuses(points){
+      if(!selectedAddress)return '';
+      const home=selectedAddress;
+      const radii=points.map(p=>{
+        const d=haversineDistance(p.lat,p.lng,home.lat,home.lng);
+        return d<50?'10':'';
+      });
+      return `&radiuses=${radii.join(';')}`;
+    }
+
     async function fetchRouteWithOsrm(start,end){
       let lastError=null;
       for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,end])}`;
         try{
           debugLog(`Iniciant fetch a OSRM... ${baseUrl}`);
           const response=await fetch(url,{signal:controller.signal});
@@ -1119,7 +1129,7 @@
       for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${waypoint.lng},${waypoint.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+        const url=`${baseUrl}/${start.lng},${start.lat};${waypoint.lng},${waypoint.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,waypoint,end])}`;
         try{
           const response=await fetch(url,{signal:controller.signal});
           if(!response.ok)throw new Error(`OSRM ${response.status}`);
