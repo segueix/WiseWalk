@@ -833,7 +833,27 @@
 
       try{
         const newStart={lat:userLocation.lat,lng:userLocation.lng};
-        const routeResult=await generateRouteFromLocation(newStart);
+
+        /* Accumulate elapsed time from the current segment */
+        const prevAccum=walkSession.accumulatedSeconds||0;
+        const segmentElapsed=Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
+        const totalAccum=prevAccum+segmentElapsed;
+
+        /* Calculate remaining distance on the current leg */
+        const activeLeg=walkSession.activeLeg||'outbound';
+        const activeCoords=activeLeg==='outbound'?outboundCoordinates:returnCoordinates;
+        let remainingM=0;
+        if(activeCoords&&activeCoords.length>1){
+          const idx=findClosestPointIndex(activeCoords,userLocation.lat,userLocation.lng);
+          remainingM=getRemainingDistance(activeCoords,idx);
+        }else{
+          const target=activeLeg==='outbound'?walkSession.destination:walkSession.origin;
+          remainingM=getDistanceToTargetMeters(target);
+        }
+        /* Use half the remaining distance as target outbound for the new route */
+        const halfRemainingM=Math.max(200,Math.round(remainingM/2));
+
+        const routeResult=await generateRouteFromLocation(newStart,halfRemainingM);
         const route=routeResult.data.routes[0];
         const newOutbound=route.geometry&&route.geometry.coordinates||[];
         const newDestination=routeResult.destination;
@@ -859,6 +879,7 @@
         walkSession.destination={lat:newDestination.lat,lng:newDestination.lng};
         walkSession.activeLeg='outbound';
         walkSession.startedAt=Date.now();
+        walkSession.accumulatedSeconds=totalAccum;
         walkSession.initialMeters=Math.round(outboundDistM);
         walkSession.outboundElapsedSeconds=null;
         walkSession.returnElapsedSeconds=null;
@@ -988,24 +1009,13 @@
         remaining=Math.round(getDistanceToTargetMeters(target));
       }
 
-      const elapsedSeconds=Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
-      let remainingTimeStr='';
-      if(walkSession.initialMeters&&walkSession.initialMeters>0&&elapsedSeconds>20){
-        const covered=walkSession.initialMeters-remaining;
-        if(covered>15){
-          const pace=elapsedSeconds/covered;
-          const rSec=Math.round(Math.max(0,remaining*pace));
-          const rMin=Math.floor(rSec/60);
-          remainingTimeStr=`${rMin}:${(rSec%60).toString().padStart(2,'0')}`;
-        }
-      }
-      if(!remainingTimeStr){
-        const rSec=Math.round(remaining/(5000/3600));
-        const rMin=Math.floor(rSec/60);
-        remainingTimeStr=`~${rMin}:${(rSec%60).toString().padStart(2,'0')}`;
-      }
+      const accum=walkSession.accumulatedSeconds||0;
+      const elapsedSeconds=accum+Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
+      const mins=Math.floor(elapsedSeconds/60);
+      const secs=elapsedSeconds%60;
+      const chronoStr=`${mins}:${secs.toString().padStart(2,'0')}`;
 
-      if(walkInfoTime)walkInfoTime.textContent=remainingTimeStr;
+      if(walkInfoTime)walkInfoTime.textContent=chronoStr;
       if(walkInfoDistance)walkInfoDistance.textContent=`${remaining} m`;
       showWalkInfoBox(true);
     }
@@ -1019,13 +1029,14 @@
     function completeCurrentLegByArrival(){
       if(!walkSession||!walkSession.activeLeg)return;
       const leg=walkSession.activeLeg;
-      const endedAt=Date.now();
-      const elapsedSeconds=Math.max(0,Math.floor((endedAt-walkSession.startedAt)/1000));
+      const accum=walkSession.accumulatedSeconds||0;
+      const elapsedSeconds=accum+Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
       showWalkInfoBox(false);
       if(leg==='outbound'){
         walkSession.outboundElapsedSeconds=elapsedSeconds;
         walkSession.activeLeg=null;
         walkSession.startedAt=null;
+        walkSession.accumulatedSeconds=0;
         stopWalkTimer();
         stopWalkWatcher();
         saveWalkSession();
@@ -1035,6 +1046,7 @@
         walkSession.returnElapsedSeconds=elapsedSeconds;
         walkSession.activeLeg=null;
         walkSession.startedAt=null;
+        walkSession.accumulatedSeconds=0;
         stopWalkTimer();
         stopWalkWatcher();
         saveWalkSession();
@@ -1239,8 +1251,10 @@
     const MAX_ROUTE_ATTEMPTS=8;
     const GLOBAL_ROUTE_TIMEOUT_MS=30000;
 
-    async function generateRouteFromLocation(start){
-      let targetDistanceMeters=TARGET_OUTBOUND_DISTANCE_M/URBAN_TORTUOSITY_FACTOR;
+    async function generateRouteFromLocation(start,overrideOutboundM){
+      const effectiveOutboundM=overrideOutboundM||TARGET_OUTBOUND_DISTANCE_M;
+      const effectiveTotalKm=(effectiveOutboundM*2)/1000;
+      let targetDistanceMeters=effectiveOutboundM/URBAN_TORTUOSITY_FACTOR;
       let chosenData=null;
       let chosenDestination=null;
       let bestData=null;
@@ -1278,14 +1292,14 @@
         if(typeof route.distance!=='number')continue;
 
         const totalDistanceKm=(route.distance*2)/1000;
-        const currentDiff=Math.abs(totalDistanceKm-TARGET_TOTAL_DISTANCE_KM);
+        const currentDiff=Math.abs(totalDistanceKm-effectiveTotalKm);
         if(currentDiff<bestDiff){
           bestDiff=currentDiff;
           bestData=data;
           const geom=route.geometry.coordinates;
           bestDestination={lat:geom[geom.length-1][1],lng:geom[geom.length-1][0]};
         }
-        debugLog(`Intent ${attempt+1}: distància total ${totalDistanceKm.toFixed(2)} km (objectiu ${TARGET_TOTAL_DISTANCE_KM} ±${DISTANCE_TOLERANCE_KM})`);
+        debugLog(`Intent ${attempt+1}: distància total ${totalDistanceKm.toFixed(2)} km (objectiu ${effectiveTotalKm.toFixed(1)} ±${DISTANCE_TOLERANCE_KM})`);
         if(currentDiff<=DISTANCE_TOLERANCE_KM){
           const geometry=route.geometry;
           const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
@@ -1299,11 +1313,11 @@
         }
 
         const actualOutboundM=route.distance;
-        const targetOutboundM=(TARGET_TOTAL_DISTANCE_KM*1000)/2;
+        const targetOutboundM=effectiveOutboundM;
         const correctionRatio=targetOutboundM/actualOutboundM;
         targetDistanceMeters=targetDistanceMeters*correctionRatio;
         const minRadius=300;
-        const maxRadius=TARGET_OUTBOUND_DISTANCE_M*1.5;
+        const maxRadius=effectiveOutboundM*1.5;
         if(targetDistanceMeters<minRadius)targetDistanceMeters=minRadius;
         if(targetDistanceMeters>maxRadius)targetDistanceMeters=maxRadius;
       }
@@ -1512,6 +1526,7 @@
         destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
         activeLeg:'outbound',
         startedAt:Date.now(),
+        accumulatedSeconds:0,
         outboundElapsedSeconds:null,
         returnElapsedSeconds:null,
         outboundClaimed:false,
@@ -1530,6 +1545,8 @@
       if(!walkSession||walkSession.outboundElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
       const legKm=currentRouteMetrics?(currentRouteMetrics.outboundDistM||currentRouteMetrics.distanceKm*500)/1000:0;
+      const elapsedH=walkSession.outboundElapsedSeconds/3600;
+      const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
       walkSession.outboundClaimed=true;
@@ -1541,7 +1558,7 @@
       saveRouteCoordinates();
 
       setWalkButtonsVisibility({returnOrigin:true});
-      setRouteInfoText(`Anada reclamada: ${burnedKcal} kcal. Prem per iniciar la tornada.`);
+      setRouteInfoText(`Anada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h. Prem per iniciar la tornada.`);
     }
 
     function startReturnWalk(){
@@ -1552,6 +1569,7 @@
       const initialM=returnCoordinates?calculatePolylineDistance(returnCoordinates):0;
       walkSession.activeLeg='return';
       walkSession.startedAt=Date.now();
+      walkSession.accumulatedSeconds=0;
       walkSession.initialMeters=Math.round(initialM);
       saveWalkSession();
       if(returnCoordinates&&returnCoordinates.length>=2){
@@ -1566,11 +1584,13 @@
       if(!walkSession||walkSession.returnElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('return',walkSession.returnElapsedSeconds);
       const legKm=currentRouteMetrics?(currentRouteMetrics.returnDistM||currentRouteMetrics.distanceKm*500)/1000:0;
+      const elapsedH=walkSession.returnElapsedSeconds/3600;
+      const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
       walkSession.returnClaimed=true;
       saveWalkSession();
-      setRouteInfoText(`Tornada reclamada: ${burnedKcal} kcal descomptades del que faltava avui.`);
+      setRouteInfoText(`Tornada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h.`);
       walkSession=null;
       setMapMode(false);
       showWalkInfoBox(false);
