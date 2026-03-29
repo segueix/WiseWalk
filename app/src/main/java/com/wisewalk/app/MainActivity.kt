@@ -75,6 +75,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var destinationMarker: PulsingMarkerOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var isProgrammaticMapMove: Boolean = false
+    private var isPickerModeActive: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -106,6 +107,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         initMap()
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+
+        // Native picker confirm button
+        findViewById<View>(R.id.btnConfirmPickerNative).setOnClickListener {
+            val center = mapView.mapCenter
+            val js = "window.wiseWalkOnMapCenterSelected && window.wiseWalkOnMapCenterSelected(${center.latitude}, ${center.longitude});"
+            binding.webView.evaluateJavascript(js, null)
+            setPickerMode(false)
+        }
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -336,6 +345,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 return false
             }
         })
+    }
+
+    private fun setPickerMode(enabled: Boolean) {
+        isPickerModeActive = enabled
+        val crosshair = findViewById<View>(R.id.pickerCrosshair)
+        val confirmBtn = findViewById<View>(R.id.btnConfirmPickerNative)
+        if (enabled) {
+            // Show map and native picker UI, hide WebView so map receives touches
+            mapView.visibility = View.VISIBLE
+            findViewById<View>(R.id.mapControlsContainer).visibility = View.VISIBLE
+            binding.webView.visibility = View.INVISIBLE
+            crosshair.visibility = View.VISIBLE
+            confirmBtn.visibility = View.VISIBLE
+            mapView.onResume()
+            if (::myLocationOverlay.isInitialized) {
+                myLocationOverlay.enableMyLocation()
+                myLocationOverlay.enableFollowLocation()
+            }
+            mapView.invalidate()
+        } else {
+            // Restore normal state - show WebView, hide picker UI, hide map
+            binding.webView.visibility = View.VISIBLE
+            crosshair.visibility = View.GONE
+            confirmBtn.visibility = View.GONE
+            mapView.visibility = View.GONE
+            findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
+            mapView.mapOrientation = 0f
+            destinationMarker?.stopAnimation()
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -804,6 +842,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val js = "window.wiseWalkOnMapCenterSelected && window.wiseWalkOnMapCenterSelected(${center.latitude}, ${center.longitude});"
                 activity.binding.webView.evaluateJavascript(js, null)
             }
+        }
+
+        @JavascriptInterface
+        fun setPickerMode(enabled: Boolean) {
+            activity.runOnUiThread { activity.setPickerMode(enabled) }
         }
 
         @JavascriptInterface

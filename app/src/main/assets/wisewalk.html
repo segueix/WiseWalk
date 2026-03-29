@@ -713,9 +713,31 @@
       return lon;
     }
 
+    /* ---- Balanced direction generation ---- */
+    const DIRECTION_SECTORS=8;
+    let directionQueue=[];
+
+    function getBalancedBearing(){
+      if(directionQueue.length===0){
+        /* Build shuffled list of sector center bearings */
+        const sectors=[];
+        const sectorSize=(2*Math.PI)/DIRECTION_SECTORS;
+        for(let i=0;i<DIRECTION_SECTORS;i++){
+          sectors.push(sectorSize*i+sectorSize*Math.random());
+        }
+        /* Fisher-Yates shuffle */
+        for(let i=sectors.length-1;i>0;i--){
+          const j=Math.floor(Math.random()*(i+1));
+          [sectors[i],sectors[j]]=[sectors[j],sectors[i]];
+        }
+        directionQueue=sectors;
+      }
+      return directionQueue.pop();
+    }
+
     function calculateRandomDestination(start,distanceMeters){
       const earthRadius=6371000;
-      const bearing=Math.random()*2*Math.PI;
+      const bearing=getBalancedBearing();
       const lat1=start.lat*Math.PI/180;
       const lon1=start.lng*Math.PI/180;
       const angularDistance=distanceMeters/earthRadius;
@@ -1065,10 +1087,13 @@
     function buildOsrmRadiuses(points){
       if(!selectedAddress)return '';
       const home=selectedAddress;
+      let anyRestricted=false;
       const radii=points.map(p=>{
         const d=haversineDistance(p.lat,p.lng,home.lat,home.lng);
-        return d<50?'10':'';
+        if(d<50){anyRestricted=true;return '10';}
+        return 'unlimited';
       });
+      if(!anyRestricted)return '';
       return `&radiuses=${radii.join(';')}`;
     }
 
@@ -1750,14 +1775,19 @@
     const btnConfirmPicker=document.getElementById('btn-confirm-picker');
 
     function openLocationPicker(){
-      setMapMode(true);
-      setWalkButtonsVisibility({start:false,claimOutbound:false,returnOrigin:false,claimReturn:false});
-      document.getElementById('route-info').style.display='none';
-      mapPickerCrosshair.classList.add('visible');
-      btnConfirmPicker.classList.add('visible');
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.setPickerMode){
+        /* Use native picker: hides WebView, shows native crosshair + confirm button */
+        WiseWalkAndroid.setPickerMode(true);
+      }else{
+        /* Fallback for web mode */
+        setMapMode(true);
+        setWalkButtonsVisibility({start:false,claimOutbound:false,returnOrigin:false,claimReturn:false});
+        document.getElementById('route-info').style.display='none';
+        mapPickerCrosshair.classList.add('visible');
+        btnConfirmPicker.classList.add('visible');
+      }
       if(selectedAddress&&selectedAddress.lat&&selectedAddress.lng){
         if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
-          /* Centrem el mapa a la ubicació guardada */
           WiseWalkAndroid.getLocation();
         }
       }else{

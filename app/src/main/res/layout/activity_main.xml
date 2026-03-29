@@ -24,6 +24,51 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Map picker crosshair (centered pin) -->
+    <TextView
+        android:id="@+id/pickerCrosshair"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="📍"
+        android:textSize="48sp"
+        android:visibility="gone"
+        android:elevation="10dp"
+        android:translationY="-24dp"
+        app:layout_constraintBottom_toTopOf="@+id/pickerCrosshairAnchor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- Invisible anchor at vertical center for the crosshair -->
+    <View
+        android:id="@+id/pickerCrosshairAnchor"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Map picker confirm button -->
+    <TextView
+        android:id="@+id/btnConfirmPickerNative"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="40dp"
+        android:background="@drawable/btn_map_control"
+        android:elevation="10dp"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="Confirmar Ubicació"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
     <LinearLayout
         android:id="@+id/mapControlsContainer"
         android:layout_width="wrap_content"
