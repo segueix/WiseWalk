@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var myLocationOverlay: MyLocationNewOverlay
     private var routePolyline: Polyline? = null
     private var destinationMarker: PulsingMarkerOverlay? = null
+    private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var isProgrammaticMapMove: Boolean = false
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -494,6 +495,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         mapView.overlays.add(marker)
                         marker.startAnimation(mapView)
 
+                        // Add snapped location overlay on top of everything
+                        snappedLocationOverlay?.let { mapView.overlays.remove(it) }
+                        val snappedOverlay = SnappedLocationOverlay()
+                        snappedLocationOverlay = snappedOverlay
+                        mapView.overlays.add(snappedOverlay)
+
                         if (mapView.width > 0 && mapView.height > 0) {
                             isProgrammaticMapMove = true
                             val boundingBox = BoundingBox.fromGeoPoints(points)
@@ -536,6 +543,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                             polyline.setPoints(points)
                             // Update destination marker position to last point
                             destinationMarker?.setPosition(points.last())
+                            // Ensure snapped overlay stays on top
+                            snappedLocationOverlay?.let { overlay ->
+                                mapView.overlays.remove(overlay)
+                                mapView.overlays.add(overlay)
+                            }
                             mapView.invalidate()
                         } ?: run {
                             val polyline = Polyline().apply {
@@ -775,6 +787,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         @JavascriptInterface
         fun updateRoute(coordinatesJson: String) {
             activity.updateRoute(coordinatesJson)
+        }
+
+        @JavascriptInterface
+        fun updateSnappedPosition(lat: Double, lng: Double, snapped: Boolean) {
+            activity.runOnUiThread {
+                activity.snappedLocationOverlay?.updatePosition(lat, lng, snapped)
+                activity.mapView.invalidate()
+            }
+        }
+
+        @JavascriptInterface
+        fun requestMapCenter() {
+            activity.runOnUiThread {
+                val center = activity.mapView.mapCenter
+                val js = "window.wiseWalkOnMapCenterSelected && window.wiseWalkOnMapCenterSelected(${center.latitude}, ${center.longitude});"
+                activity.binding.webView.evaluateJavascript(js, null)
+            }
         }
 
         @JavascriptInterface
