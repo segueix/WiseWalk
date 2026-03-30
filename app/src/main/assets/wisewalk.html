@@ -122,7 +122,7 @@
     .map-picker-crosshair.visible{display:block}
     .btn-confirm-picker{position:fixed;bottom:2.5rem;left:50%;transform:translateX(-50%);width:85%;max-width:320px;z-index:1000;display:none;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:1.1rem}
     .btn-confirm-picker.visible{display:flex}
-    .btn-recalculate{display:none;position:fixed;top:16px;right:16px;padding:8px 14px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:.88rem;font-weight:600;font-family:'Roboto Flex',sans-serif;z-index:1002;cursor:pointer;backdrop-filter:blur(6px)}
+    .btn-recalculate{display:none;position:fixed;top:16px;right:16px;width:38px;height:38px;padding:0;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:1.2rem;z-index:1002;cursor:pointer;backdrop-filter:blur(6px);line-height:38px;text-align:center}
     body.map-mode .btn-recalculate.visible{display:block}
     body.map-mode .walk-exit-btn.visible{display:block}
     body.map-mode .walk-info-box.visible{display:block}
@@ -289,7 +289,7 @@
     <div class="walk-info-time" id="walk-info-time">0:00</div>
     <div class="walk-info-distance" id="walk-info-distance">0 m</div>
   </div>
-  <button class="btn-recalculate" id="btn-recalculate-route">🔄 Recalcular</button>
+  <button class="btn-recalculate" id="btn-recalculate-route">🔄</button>
 
   <div id="debug-panel" class="debug-panel" aria-hidden="true">
     <div class="debug-title">Mode Debug</div>
