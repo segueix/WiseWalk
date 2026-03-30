@@ -831,6 +831,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fun updateSnappedPosition(lat: Double, lng: Double, snapped: Boolean) {
             activity.runOnUiThread {
                 activity.snappedLocationOverlay?.updatePosition(lat, lng, snapped)
+                if (activity::myLocationOverlay.isInitialized) {
+                    if (snapped) {
+                        activity.myLocationOverlay.isDrawAccuracyEnabled = false
+                        activity.myLocationOverlay.isEnabled = false
+                    } else {
+                        activity.myLocationOverlay.isEnabled = true
+                        activity.myLocationOverlay.isDrawAccuracyEnabled = true
+                    }
+                }
                 activity.mapView.invalidate()
             }
         }
