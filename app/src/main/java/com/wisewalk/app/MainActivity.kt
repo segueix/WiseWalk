@@ -18,6 +18,10 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -284,6 +288,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.isVerticalMapRepetitionEnabled = false
 
         myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), mapView)
+        val locationMarkerBitmap = createLocationMarkerBitmap()
+        val directionArrowBitmap = createDirectionArrowBitmap()
+        myLocationOverlay.setDirectionArrow(locationMarkerBitmap, directionArrowBitmap)
         myLocationOverlay.enableMyLocation()
         myLocationOverlay.enableFollowLocation()
         mapView.overlays.add(myLocationOverlay)
@@ -406,6 +413,52 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapView.mapOrientation = 0f
             destinationMarker?.stopAnimation()
         }
+    }
+
+    private fun createLocationMarkerBitmap(): Bitmap {
+        val density = resources.displayMetrics.density
+        val sizePx = (30f * density).toInt().coerceAtLeast(24)
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(130, 255, 255, 255)
+            style = Paint.Style.FILL
+        }
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 2f * density
+        }
+        val radius = sizePx / 2f - (2f * density)
+        val cx = sizePx / 2f
+        val cy = sizePx / 2f
+        canvas.drawCircle(cx, cy, radius, fillPaint)
+        canvas.drawCircle(cx, cy, radius, strokePaint)
+        return bitmap
+    }
+
+    private fun createDirectionArrowBitmap(): Bitmap {
+        val density = resources.displayMetrics.density
+        val sizePx = (24f * density).toInt().coerceAtLeast(18)
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        val cx = sizePx / 2f
+        val cy = sizePx / 2f
+        val radius = sizePx / 2f
+        val arrowPath = Path().apply {
+            moveTo(cx, cy - radius * 0.9f)
+            lineTo(cx - radius * 0.42f, cy + radius * 0.45f)
+            lineTo(cx, cy + radius * 0.2f)
+            lineTo(cx + radius * 0.42f, cy + radius * 0.45f)
+            close()
+        }
+        canvas.drawPath(arrowPath, paint)
+        return bitmap
     }
 
     @SuppressLint("MissingPermission")
