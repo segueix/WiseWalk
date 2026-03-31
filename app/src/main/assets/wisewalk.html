@@ -122,7 +122,7 @@
     .map-picker-crosshair.visible{display:block}
     .btn-confirm-picker{position:fixed;bottom:2.5rem;left:50%;transform:translateX(-50%);width:85%;max-width:320px;z-index:1000;display:none;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:1.1rem}
     .btn-confirm-picker.visible{display:flex}
-    .btn-recalculate{display:none;position:fixed;top:16px;right:16px;padding:8px 14px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:.88rem;font-weight:600;font-family:'Roboto Flex',sans-serif;z-index:1002;cursor:pointer;backdrop-filter:blur(6px)}
+    .btn-recalculate{display:none;position:fixed;top:16px;right:16px;width:38px;height:38px;padding:0;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:1.2rem;z-index:1002;cursor:pointer;backdrop-filter:blur(6px);line-height:38px;text-align:center}
     body.map-mode .btn-recalculate.visible{display:block}
     body.map-mode .walk-exit-btn.visible{display:block}
     body.map-mode .walk-info-box.visible{display:block}
@@ -165,7 +165,7 @@
           </div>
           <div class="form-group">
             <label>📍 Punt d'inici de ruta (opcional)</label>
-            <button type="button" class="address-gps-btn" style="margin-top:.5rem" onclick="openLocationPicker()">📍 Marcar punt d'inici al mapa</button>
+            <button type="button" class="address-gps-btn" style="margin-top:.5rem" onclick="openLocationPicker()">📍 Fixar punt d'inici aquí</button>
             <div class="address-status" id="address-status-setup">Les rutes començaran des del GPS en temps real.</div>
           </div>
           <button type="submit" class="btn">Continuar</button>
@@ -262,7 +262,7 @@
         <form id="form-config">
           <div class="form-group">
             <label>📍 Punt d'inici de ruta</label>
-            <button type="button" class="address-gps-btn" style="margin-top:.5rem" onclick="openLocationPicker()">📍 Marcar punt d'inici al mapa</button>
+            <button type="button" class="address-gps-btn" style="margin-top:.5rem" onclick="openLocationPicker()">📍 Fixar punt d'inici aquí</button>
             <div class="address-status" id="address-status-config">Les rutes començaran des del GPS en temps real.</div>
           </div>
           <div class="form-group"><label>Sexe</label><div class="sex-selector"><div class="sex-option"><input type="radio" name="sex-config" id="sex-m-config" value="M" checked><label for="sex-m-config"><span class="sex-icon">♂</span><span class="sex-label">Home</span></label></div><div class="sex-option"><input type="radio" name="sex-config" id="sex-f-config" value="F"><label for="sex-f-config"><span class="sex-icon">♀</span><span class="sex-label">Dona</span></label></div></div></div>
@@ -289,7 +289,7 @@
     <div class="walk-info-time" id="walk-info-time">0:00</div>
     <div class="walk-info-distance" id="walk-info-distance">0 m</div>
   </div>
-  <button class="btn-recalculate" id="btn-recalculate-route">🔄 Recalcular</button>
+  <button class="btn-recalculate" id="btn-recalculate-route">🔄</button>
 
   <div id="debug-panel" class="debug-panel" aria-hidden="true">
     <div class="debug-title">Mode Debug</div>
@@ -871,7 +871,7 @@
         const totalPositiveGainM=await fetchElevationGain(newOutbound);
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
-        currentRoute={start:newStart,end:newDestination};
+        currentRoute={start:walkSession.origin,end:newDestination};
         previousDestination=newDestination;
 
         sendRouteToNative(outboundCoordinates);
@@ -1831,22 +1831,21 @@
     const btnConfirmPicker=document.getElementById('btn-confirm-picker');
 
     function openLocationPicker(){
-      if(window.WiseWalkAndroid&&WiseWalkAndroid.setPickerMode){
-        /* Use native picker: hides WebView, shows native crosshair + confirm button */
-        WiseWalkAndroid.setPickerMode(true);
-      }else{
-        /* Fallback for web mode */
-        setMapMode(true);
-        setWalkButtonsVisibility({start:false,claimOutbound:false,returnOrigin:false,claimReturn:false});
-        document.getElementById('route-info').style.display='none';
-        mapPickerCrosshair.classList.add('visible');
-        btnConfirmPicker.classList.add('visible');
+      /* Auto-set current GPS position as start point without opening map */
+      function onGotLocation(lat,lng){
+        saveHomeAddress({source:'map_picker',lat:lat,lng:lng,displayName:'Punt GPS actual'});
+        debugLog('Punt d\'inici fixat automàticament via GPS: '+lat.toFixed(5)+', '+lng.toFixed(5));
       }
-      if(selectedAddress&&selectedAddress.lat&&selectedAddress.lng){
-        if(window.WiseWalkAndroid&&WiseWalkAndroid.getLocation){
-          WiseWalkAndroid.getLocation();
-        }
+      if(userLocation&&userLocation.lat&&userLocation.lng){
+        onGotLocation(userLocation.lat,userLocation.lng);
       }else{
+        /* Request location and wait for it */
+        const prevHandler=window.wiseWalkSetLocation;
+        window.wiseWalkSetLocation=function(lat,lng){
+          window.wiseWalkSetLocation=prevHandler;
+          if(prevHandler)prevHandler(lat,lng);
+          onGotLocation(lat,lng);
+        };
         getLocation();
       }
     }

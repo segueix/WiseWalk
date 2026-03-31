@@ -18,7 +18,6 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
-import android.graphics.Paint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -49,7 +48,6 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import kotlin.concurrent.thread
@@ -71,7 +69,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var rotationSensor: Sensor? = null
     private lateinit var myLocationOverlay: MyLocationNewOverlay
-    private var routePolyline: Polyline? = null
+    private var routePolyline: ArrowRouteOverlay? = null
+    private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var isProgrammaticMapMove: Boolean = false
@@ -166,11 +165,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val bearing = intent.getFloatExtra(StepTrackingService.EXTRA_BEARING, 0f)
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
-                    if (isWalkGpsModeActive) {
+                    if (isWalkGpsModeActive && !isUserInteractingWithMap) {
                         val geoPoint = GeoPoint(lat, lng)
                         isProgrammaticMapMove = true
                         myLocationOverlay.enableFollowLocation()
-                        mapView.controller.animateTo(geoPoint, mapView.zoomLevelDouble, 300L)
+                        val targetZoom = mapView.zoomLevelDouble.coerceAtLeast(17.5)
+                        mapView.controller.animateTo(geoPoint, targetZoom, 300L)
                         mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
                     }
                 }
@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.setBuiltInZoomControls(false)
         mapView.minZoomLevel = 3.0
         mapView.maxZoomLevel = 20.0
-        mapView.controller.setZoom(15.0)
+        mapView.controller.setZoom(17.0)
         mapView.isHorizontalMapRepetitionEnabled = false
         mapView.isVerticalMapRepetitionEnabled = false
 
@@ -299,6 +299,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         findViewById<ImageButton>(R.id.btn_center_me).setOnClickListener {
             try {
+                isUserInteractingWithMap = false
                 isProgrammaticMapMove = true
                 myLocationOverlay.enableFollowLocation()
                 val loc = myLocationOverlay.myLocation
@@ -332,15 +333,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
-                if (!isProgrammaticMapMove && !isWalkGpsModeActive) {
+                if (!isProgrammaticMapMove) {
                     myLocationOverlay.disableFollowLocation()
+                    if (isWalkGpsModeActive) {
+                        isUserInteractingWithMap = true
+                    }
                 }
                 return false
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                if (!isProgrammaticMapMove && !isWalkGpsModeActive) {
+                if (!isProgrammaticMapMove) {
                     myLocationOverlay.disableFollowLocation()
+                    if (isWalkGpsModeActive) {
+                        isUserInteractingWithMap = true
+                    }
                 }
                 return false
             }
@@ -515,16 +522,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         if (::myLocationOverlay.isInitialized) {
                             mapView.overlays.add(myLocationOverlay)
                         }
-                        val polyline = Polyline().apply {
+                        val arrowOverlay = ArrowRouteOverlay().apply {
                             setPoints(points)
-                            outlinePaint.color = Color.parseColor("#2E7D32")
-                            outlinePaint.strokeWidth = 18f
-                            outlinePaint.strokeCap = Paint.Cap.ROUND
-                            outlinePaint.strokeJoin = Paint.Join.ROUND
-                            outlinePaint.isAntiAlias = true
                         }
-                        routePolyline = polyline
-                        mapView.overlays.add(polyline)
+                        routePolyline = arrowOverlay
+                        mapView.overlays.add(arrowOverlay)
 
                         // Add pulsing destination marker at last point
                         destinationMarker?.stopAnimation()
@@ -542,7 +544,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         if (mapView.width > 0 && mapView.height > 0) {
                             isProgrammaticMapMove = true
                             val boundingBox = BoundingBox.fromGeoPoints(points)
-                            mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 72).toInt())
+                            mapView.zoomToBoundingBox(boundingBox, true, (resources.displayMetrics.density * 48).toInt())
                             mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
                         }
 
@@ -577,8 +579,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 runOnUiThread {
                     try {
-                        routePolyline?.let { polyline ->
-                            polyline.setPoints(points)
+                        routePolyline?.let { arrowOverlay ->
+                            arrowOverlay.setPoints(points)
                             // Update destination marker position to last point
                             destinationMarker?.setPosition(points.last())
                             // Ensure snapped overlay stays on top
@@ -588,16 +590,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                             }
                             mapView.invalidate()
                         } ?: run {
-                            val polyline = Polyline().apply {
+                            val arrowOverlay = ArrowRouteOverlay().apply {
                                 setPoints(points)
-                                outlinePaint.color = Color.parseColor("#2E7D32")
-                                outlinePaint.strokeWidth = 18f
-                                outlinePaint.strokeCap = Paint.Cap.ROUND
-                                outlinePaint.strokeJoin = Paint.Join.ROUND
-                                outlinePaint.isAntiAlias = true
                             }
-                            routePolyline = polyline
-                            mapView.overlays.add(polyline)
+                            routePolyline = arrowOverlay
+                            mapView.overlays.add(arrowOverlay)
                             mapView.invalidate()
                         }
                     } catch (e: Throwable) {
@@ -779,6 +776,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
                 try {
                     activity.isWalkGpsModeActive = true
+                    activity.isUserInteractingWithMap = false
                     activity.myLocationOverlay.enableFollowLocation()
                     if (activity.isCompassEnabled) {
                         activity.rotationSensor?.let {
