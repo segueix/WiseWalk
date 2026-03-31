@@ -20,7 +20,7 @@ class ArrowRouteOverlay : Overlay() {
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#1A73E8")
-        strokeWidth = 36f
+        strokeWidth = 25f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
         style = Paint.Style.STROKE
