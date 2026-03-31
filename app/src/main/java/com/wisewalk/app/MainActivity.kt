@@ -137,6 +137,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
             }
         }
+        // DEIXAR PASSAR ELS TOCS AL MAPA
+        wv.setOnTouchListener { _, event ->
+            if (isWalkGpsModeActive) {
+                val density = resources.displayMetrics.density
+                val yDp = event.y / density
+                val heightDp = wv.height / density
+
+                // Si el dit toca la zona central (deixant 120dp per la UI de dalt i 240dp per la UI de baix)
+                if (yDp > 120 && yDp < heightDp - 240) {
+                    // Passem l'acció directament al mapa perquè puguis fer zoom i arrossegar
+                    mapView.dispatchTouchEvent(event)
+                    return@setOnTouchListener true
+                }
+            }
+            false
+        }
 
         wv.settings.apply {
             javaScriptEnabled = true
@@ -165,11 +181,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val bearing = intent.getFloatExtra(StepTrackingService.EXTRA_BEARING, 0f)
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
+                    val loc = Location("fused")
+                    loc.latitude = lat
+                    loc.longitude = lng
+                    loc.bearing = bearing
+                    loc.time = System.currentTimeMillis()
+                    if (::myLocationOverlay.isInitialized) {
+                        myLocationOverlay.onLocationChanged(loc, null)
+                    }
                     if (isWalkGpsModeActive && !isUserInteractingWithMap) {
                         val geoPoint = GeoPoint(lat, lng)
                         isProgrammaticMapMove = true
                         myLocationOverlay.enableFollowLocation()
-                        val targetZoom = mapView.zoomLevelDouble.coerceAtLeast(17.5)
+                        val targetZoom = mapView.zoomLevelDouble.coerceAtLeast(19.0)
                         mapView.controller.animateTo(geoPoint, targetZoom, 300L)
                         mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
                     }
@@ -255,6 +279,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.minZoomLevel = 3.0
         mapView.maxZoomLevel = 20.0
         mapView.controller.setZoom(17.0)
+        mapView.isTilesScaledToDpi = true
         mapView.isHorizontalMapRepetitionEnabled = false
         mapView.isVerticalMapRepetitionEnabled = false
 
