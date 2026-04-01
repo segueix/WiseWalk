@@ -417,7 +417,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun createLocationMarkerBitmap(): Bitmap {
         val density = resources.displayMetrics.density
-        val sizePx = (150f * density).toInt().coerceAtLeast(120)
+        val sizePx = (1200f * density).toInt().coerceAtLeast(960)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -440,7 +440,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun createDirectionArrowBitmap(): Bitmap {
         val density = resources.displayMetrics.density
-        val sizePx = (120f * density).toInt().coerceAtLeast(90)
+        val sizePx = (960f * density).toInt().coerceAtLeast(720)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
