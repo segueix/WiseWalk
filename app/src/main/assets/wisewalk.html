@@ -823,8 +823,17 @@
         setRouteInfoText('No hi ha cap sessió activa.');
         return;
       }
+      if((walkSession.activeLeg||'outbound')!=='outbound'){
+        setRouteInfoText('La ruta només es pot recalcular durant el trajecte d\'anada.');
+        return;
+      }
       if(!userLocation){
         setRouteInfoText('No es pot recalcular: ubicació no disponible.');
+        return;
+      }
+      const distanceToFinal=getDistanceToTargetMeters(walkSession.destination);
+      if(!Number.isFinite(distanceToFinal)||distanceToFinal>200){
+        setRouteInfoText(`Només es pot recalcular a menys de 200 m del punt final (ara: ${Math.round(distanceToFinal)} m).`);
         return;
       }
 
@@ -839,21 +848,8 @@
         const segmentElapsed=Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
         const totalAccum=prevAccum+segmentElapsed;
 
-        /* Calculate remaining distance on the current leg */
-        const activeLeg=walkSession.activeLeg||'outbound';
-        const activeCoords=activeLeg==='outbound'?outboundCoordinates:returnCoordinates;
-        let remainingM=0;
-        if(activeCoords&&activeCoords.length>1){
-          const idx=findClosestPointIndex(activeCoords,userLocation.lat,userLocation.lng);
-          remainingM=getRemainingDistance(activeCoords,idx);
-        }else{
-          const target=activeLeg==='outbound'?walkSession.destination:walkSession.origin;
-          remainingM=getDistanceToTargetMeters(target);
-        }
-        /* Use half the remaining distance as target outbound for the new route */
-        const halfRemainingM=Math.max(200,Math.round(remainingM/2));
-
-        const routeResult=await generateRouteFromLocation(newStart,halfRemainingM);
+        /* Nova ruta curta (~200m) des de la ubicació real de l'usuari, encara que estigui fora de ruta */
+        const routeResult=await generateRouteFromLocation(newStart,200);
         const route=routeResult.data.routes[0];
         const newOutbound=route.geometry&&route.geometry.coordinates||[];
         const newDestination=routeResult.destination;
@@ -871,7 +867,7 @@
         const totalPositiveGainM=await fetchElevationGain(newOutbound);
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
-        currentRoute={start:walkSession.origin,end:newDestination};
+        currentRoute={start:newStart,end:newDestination};
         previousDestination=newDestination;
 
         sendRouteToNative(outboundCoordinates);
