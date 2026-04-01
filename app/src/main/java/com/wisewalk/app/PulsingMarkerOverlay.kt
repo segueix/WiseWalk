@@ -14,18 +14,18 @@ class PulsingMarkerOverlay(
 ) : Overlay() {
 
     private val centerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#2E7D32")
+        color = Color.parseColor("#FF9800")
         style = Paint.Style.FILL
     }
 
     private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#2E7D32")
+        color = Color.parseColor("#FF9800")
         style = Paint.Style.STROKE
         strokeWidth = 4f
     }
 
-    private val centerRadiusDp = 7f
-    private val maxRippleRadiusDp = 30f
+    private val centerRadiusDp = 35f
+    private val maxRippleRadiusDp = 150f
     private val rippleCount = 3
     private var animProgress = 0f
 
