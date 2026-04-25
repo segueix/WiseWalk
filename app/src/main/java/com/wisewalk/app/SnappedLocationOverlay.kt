@@ -45,7 +45,7 @@ class SnappedLocationOverlay : Overlay() {
         style = Paint.Style.FILL
     }
 
-    private val radiusDp = 9f
+    private val radiusDp = 14f
     private val shadowOffsetDp = 1.5f
 
     fun updatePosition(lat: Double, lng: Double, snapped: Boolean) {
@@ -83,10 +83,10 @@ class SnappedLocationOverlay : Overlay() {
 
         // White direction arrow
         val arrowPath = Path().apply {
-            moveTo(x, y - radius * 0.62f)
-            lineTo(x - radius * 0.38f, y + radius * 0.42f)
-            lineTo(x, y + radius * 0.18f)
-            lineTo(x + radius * 0.38f, y + radius * 0.42f)
+            moveTo(x, y - radius * 0.72f)
+            lineTo(x - radius * 0.44f, y + radius * 0.46f)
+            lineTo(x, y + radius * 0.14f)
+            lineTo(x + radius * 0.44f, y + radius * 0.46f)
             close()
         }
         canvas.drawPath(arrowPath, arrowPaint)

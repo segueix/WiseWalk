@@ -24,8 +24,8 @@ class PulsingMarkerOverlay(
         strokeWidth = 4f
     }
 
-    private val centerRadiusDp = 35f
-    private val maxRippleRadiusDp = 150f
+    private val centerRadiusDp = 16f
+    private val maxRippleRadiusDp = 72f
     private val rippleCount = 3
     private var animProgress = 0f
 
