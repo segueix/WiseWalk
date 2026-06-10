@@ -3,6 +3,7 @@ package com.wisewalk.app
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
@@ -19,7 +20,7 @@ class SnappedLocationOverlay : Overlay() {
     private var isSnapped: Boolean = false
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#1976D2")
+        color = Color.argb(130, 255, 255, 255)
         style = Paint.Style.FILL
     }
 
@@ -39,7 +40,12 @@ class SnappedLocationOverlay : Overlay() {
         style = Paint.Style.FILL
     }
 
-    private val radiusDp = 9f
+    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
+
+    private val radiusDp = 14f
     private val shadowOffsetDp = 1.5f
 
     fun updatePosition(lat: Double, lng: Double, snapped: Boolean) {
@@ -72,7 +78,17 @@ class SnappedLocationOverlay : Overlay() {
         strokePaint.strokeWidth = 3f * density
         canvas.drawCircle(x, y, radius, strokePaint)
 
-        // Blue fill
+        // Translucid fill
         canvas.drawCircle(x, y, radius, fillPaint)
+
+        // White direction arrow
+        val arrowPath = Path().apply {
+            moveTo(x, y - radius * 0.72f)
+            lineTo(x - radius * 0.44f, y + radius * 0.46f)
+            lineTo(x, y + radius * 0.14f)
+            lineTo(x + radius * 0.44f, y + radius * 0.46f)
+            close()
+        }
+        canvas.drawPath(arrowPath, arrowPaint)
     }
 }

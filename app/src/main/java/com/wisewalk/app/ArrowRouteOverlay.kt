@@ -19,8 +19,8 @@ class ArrowRouteOverlay : Overlay() {
     private var points: List<GeoPoint> = emptyList()
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#2E7D32")
-        strokeWidth = 18f
+        color = Color.parseColor("#1A73E8")
+        strokeWidth = 25f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
         style = Paint.Style.STROKE
