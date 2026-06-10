@@ -586,10 +586,20 @@
     const loadProfile=()=>{try{return JSON.parse(localStorage.getItem('wisewalk-profile'))}catch(_){return null}};
     const saveProfile=p=>localStorage.setItem('wisewalk-profile',JSON.stringify(p));
 
+    function syncNativeMapTheme(){
+      try{
+        if(window.WiseWalkAndroid&&WiseWalkAndroid.setMapTheme){
+          const accent=getComputedStyle(html).getPropertyValue('--accent').trim();
+          WiseWalkAndroid.setMapTheme(html.getAttribute('data-theme')==='dark',accent);
+        }
+      }catch(_){}
+    }
+
     function setTheme(theme){
       html.setAttribute('data-theme',theme);
       localStorage.setItem('wisewalk-theme',theme);
       metaTheme.setAttribute('content',theme==='dark'?'#1a1d1d':'#f8f6f1');
+      syncNativeMapTheme();
     }
 
     function updateColorSelector(){
@@ -601,6 +611,7 @@
       html.setAttribute('data-color',color);
       localStorage.setItem('wisewalk-color',color);
       updateColorSelector();
+      syncNativeMapTheme();
     }
 
     function showScreen(name){

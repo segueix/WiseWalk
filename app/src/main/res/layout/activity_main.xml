@@ -56,7 +56,7 @@
         android:layout_marginStart="32dp"
         android:layout_marginEnd="32dp"
         android:layout_marginBottom="40dp"
-        android:background="@drawable/btn_map_control"
+        android:background="@drawable/btn_map_confirm"
         android:elevation="10dp"
         android:gravity="center"
         android:padding="16dp"
@@ -86,9 +86,10 @@
             android:layout_marginBottom="8dp"
             android:background="@drawable/btn_map_control"
             android:contentDescription="Zoom in"
+            android:elevation="4dp"
             android:gravity="center"
             android:text="+"
-            android:textColor="#FFFFFF"
+            android:textColor="#3C4043"
             android:textSize="22sp"
             android:textStyle="bold" />
 
@@ -99,9 +100,10 @@
             android:layout_marginBottom="8dp"
             android:background="@drawable/btn_map_control"
             android:contentDescription="Zoom out"
+            android:elevation="4dp"
             android:gravity="center"
             android:text="–"
-            android:textColor="#FFFFFF"
+            android:textColor="#3C4043"
             android:textSize="22sp"
             android:textStyle="bold" />
 
@@ -112,9 +114,11 @@
             android:layout_marginBottom="8dp"
             android:background="@drawable/btn_map_control"
             android:contentDescription="Center map on my location"
+            android:elevation="4dp"
             android:padding="10dp"
             android:scaleType="fitCenter"
-            android:src="@android:drawable/ic_menu_mylocation" />
+            android:src="@android:drawable/ic_menu_mylocation"
+            android:tint="#3C4043" />
 
         <ImageButton
             android:id="@+id/btn_compass_toggle"
@@ -122,9 +126,11 @@
             android:layout_height="44dp"
             android:background="@drawable/btn_map_control"
             android:contentDescription="Toggle compass orientation"
+            android:elevation="4dp"
             android:padding="10dp"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_compass" />
+            android:src="@drawable/ic_compass"
+            android:tint="#3C4043" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
