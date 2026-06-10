@@ -77,6 +77,35 @@
     .route-option-title{display:block;font-weight:600;font-size:.9rem}
     .route-option-meta{display:block;font-size:.75rem;color:var(--text-soft)}
 
+    /* ---- Tamagotchi ---- */
+    #btnPet{position:relative}
+    .notif-dot{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:#d9534f;display:none;border:2px solid var(--bg)}
+    .pet-status{display:flex;align-items:center;gap:.75rem;width:100%;background:none;border:none;cursor:pointer;font-family:'Roboto Flex',sans-serif;color:var(--text);text-align:left;padding:0}
+    .pet-mini{width:48px;height:48px;border-radius:13px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .pet-mini canvas{width:34px;height:34px;image-rendering:pixelated}
+    .pet-status-name{display:block;font-weight:700;font-size:1rem}
+    .pet-status-msg{display:block;font-size:.78rem;color:var(--text-soft)}
+    .pet-status-chevron{margin-left:auto;color:var(--text-soft);flex-shrink:0}
+    .tama-shell{width:min(290px,100%);margin:0 auto;padding:1.9rem 1.5rem 1.3rem;background:var(--accent);border-radius:48% 48% 44% 44%/40% 40% 58% 58%;box-shadow:inset 0 -10px 22px rgba(0,0,0,.22),inset 0 6px 14px rgba(255,255,255,.18),0 12px 26px var(--shadow)}
+    .tama-lcd{background:var(--bg-card);border-radius:16px;padding:.9rem .7rem .6rem;border:4px solid rgba(0,0,0,.22)}
+    .tama-canvas{display:block;margin:0 auto;width:120px;height:120px;image-rendering:pixelated}
+    .tama-canvas.bounce{animation:tamaBounce .7s ease}
+    @keyframes tamaBounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-7px) scale(1.04)}60%{transform:translateY(0)}80%{transform:translateY(-3px)}}
+    .tama-msg{text-align:center;font-size:.74rem;color:var(--text-soft);min-height:2.1em;margin-top:.4rem;line-height:1.4}
+    .tama-buttons{display:flex;justify-content:center;gap:1.2rem;margin-top:1.15rem}
+    .tama-btn{width:36px;height:36px;border-radius:50%;border:none;background:var(--bg-card);color:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:inset 0 -3px 6px rgba(0,0,0,.22),0 2px 4px rgba(0,0,0,.25)}
+    .tama-btn:active{transform:scale(.94)}
+    .tama-btn svg{width:16px;height:16px}
+    .pet-section-title{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-soft);margin:1.4rem 0 .6rem}
+    .pet-inventory{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+    .pet-item{display:flex;flex-direction:column;align-items:center;gap:.2rem;padding:.6rem .25rem;background:var(--input-bg);border:2px solid var(--border);border-radius:12px;cursor:pointer;font-family:'Roboto Flex',sans-serif;color:var(--text);transition:all .2s}
+    .pet-item svg{width:20px;height:20px;color:var(--accent)}
+    .pet-item-name{font-size:.68rem;font-weight:600}
+    .pet-item-qty{font-size:.68rem;color:var(--text-soft)}
+    .pet-item.empty{opacity:.45}
+    .pet-item:active{transform:scale(.97)}
+    body.map-mode #card-pet{display:none!important}
+
     .hero-ring-wrap{display:flex;justify-content:center;margin-top:.25rem}
     .hero-ring{position:relative;width:172px;height:172px}
     .hero-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
@@ -161,6 +190,7 @@
         </div>
         <div class="topbar-actions">
           <button class="icon-btn theme-toggle" id="themeToggle" title="Canviar tema"><span class="icon-sun"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span><span class="icon-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span></button>
+          <button class="icon-btn" id="btnPet" style="display:none" title="La teva mascota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg><span class="notif-dot" id="pet-dot"></span></button>
           <button class="icon-btn" id="btnConfig" title="Configuració"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h7"/><path d="M19 8h1"/><circle cx="15" cy="8" r="2.5"/><path d="M4 16h1"/><path d="M13 16h7"/><circle cx="9" cy="16" r="2.5"/></svg></button>
         </div>
       </div>
@@ -220,6 +250,13 @@
           <div class="goal-row"><span class="goal-row-label">Setmana</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-week"></div></div><span class="goal-row-value" id="val-week">0 / 0</span></div>
           <div class="goal-row"><span class="goal-row-label">Mes</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-month"></div></div><span class="goal-row-value" id="val-month">0 / 0</span></div>
         </div>
+      </section>
+      <section class="card" id="card-pet" style="display:none">
+        <button class="pet-status" id="pet-status-btn" type="button">
+          <span class="pet-mini"><canvas id="pet-mini-canvas" width="12" height="12"></canvas></span>
+          <span><span class="pet-status-name" id="pet-status-name"></span><span class="pet-status-msg" id="pet-status-msg"></span></span>
+          <svg class="pet-status-chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
       </section>
       <section class="card" id="card-activity">
         <div class="result-header">
@@ -284,6 +321,38 @@
         <button type="button" class="btn btn-secondary btn-small" id="btn-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Tornar</button>
       </section>
     </div>
+
+    <div id="screen-pet" class="screen">
+      <section class="card">
+        <div class="result-header">
+          <div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg></div>
+          <div>
+            <div class="result-title" id="pet-title">Mascota</div>
+            <div class="result-subtitle" id="pet-stage-label">—</div>
+          </div>
+        </div>
+        <div class="tama-shell">
+          <div class="tama-lcd">
+            <canvas class="tama-canvas" id="tama-canvas" width="12" height="12"></canvas>
+            <div class="tama-msg" id="tama-msg"></div>
+          </div>
+          <div class="tama-buttons">
+            <button class="tama-btn" id="tama-btn-feed" type="button" title="Alimentar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8c-4 0-6 3-6 6 0 4 3 7 6 7s6-3 6-7c0-3-2-6-6-6z"/><path d="M12 8c0-3 1-4 3-5"/></svg></button>
+            <button class="tama-btn" id="tama-btn-play" type="button" title="Jugar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5a8 8 0 0 1 0 11"/><path d="M17.5 6.5a8 8 0 0 0 0 11"/></svg></button>
+            <button class="tama-btn" id="tama-btn-status" type="button" title="Estat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>
+          </div>
+        </div>
+        <div class="goal-rows" style="margin-top:1.4rem">
+          <div class="goal-row"><span class="goal-row-label">Menjar</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-hunger"></div></div><span class="goal-row-value" id="val-hunger">—</span></div>
+          <div class="goal-row"><span class="goal-row-label">Felicitat</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-happy"></div></div><span class="goal-row-value" id="val-happy">—</span></div>
+          <div class="goal-row"><span class="goal-row-label">Evolució</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-xp"></div></div><span class="goal-row-value" id="val-xp">—</span></div>
+        </div>
+        <div class="pet-section-title">Inventari</div>
+        <div class="pet-inventory" id="pet-inventory"></div>
+        <div class="address-status" id="pet-hint">Els elements apareixeran a les teves rutes. Camina per recollir-los!</div>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-pet-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Tornar</button>
+      </section>
+    </div>
   </div>
 
   <button class="walk-exit-btn" id="walk-exit-btn">&#8592;</button>
@@ -299,6 +368,7 @@
       <button class="btn btn-secondary debug-btn" id="btn-debug-simulate">🧪 Simular Ubicació i Ruta</button>
       <button class="btn btn-secondary debug-btn" id="btn-debug-destination">📍 Saltar al Destí</button>
       <button class="btn btn-secondary debug-btn" id="btn-debug-origin">↩️ Saltar a l'Origen</button>
+      <button class="btn btn-secondary debug-btn" id="btn-debug-pet">🐾 Mascota: crear / +XP / +ítems</button>
       <button class="btn btn-secondary debug-btn" id="btn-debug-export">⬇️ Exportar logs</button>
     </div>
     <div id="debug-console" class="debug-console" aria-live="polite"></div>
@@ -311,6 +381,7 @@
     const screenSetup=document.getElementById('screen-setup');
     const screenMain=document.getElementById('screen-main');
     const screenConfig=document.getElementById('screen-config');
+    const screenPet=document.getElementById('screen-pet');
     const formSetup=document.getElementById('form-setup');
     const formConfig=document.getElementById('form-config');
     const btnConfig=document.getElementById('btnConfig');
@@ -600,6 +671,7 @@
       localStorage.setItem('wisewalk-theme',theme);
       metaTheme.setAttribute('content',theme==='dark'?'#1a1d1d':'#f8f6f1');
       syncNativeMapTheme();
+      refreshPetSprites();
     }
 
     function updateColorSelector(){
@@ -612,13 +684,21 @@
       localStorage.setItem('wisewalk-color',color);
       updateColorSelector();
       syncNativeMapTheme();
+      refreshPetSprites();
     }
 
     function showScreen(name){
-      [screenSetup,screenMain,screenConfig].forEach(screen=>screen.classList.remove('active'));
+      [screenSetup,screenMain,screenConfig,screenPet].forEach(screen=>screen.classList.remove('active'));
       if(name==='setup')screenSetup.classList.add('active');
       if(name==='main')screenMain.classList.add('active');
       if(name==='config')screenConfig.classList.add('active');
+      if(name==='pet'){
+        screenPet.classList.add('active');
+        updatePetUi();
+        startTamaAnimation();
+      }else{
+        stopTamaAnimation();
+      }
     }
 
     function loadConfigForm(){
@@ -919,6 +999,303 @@
       if(km)km.textContent=`${formatDecimal(totals.totalKm.toFixed(1))} km`;
       if(kcal)kcal.textContent=totals.totalKcal.toLocaleString('ca');
       if(walks)walks.textContent=totals.walks;
+    }
+
+    /* ==== Tamagotchi: estat, inventari i pantalla ==== */
+    const PET_ITEMS={
+      apple:{name:'Poma',hunger:20,happiness:0,xp:0,weight:45},
+      cookie:{name:'Galeta',hunger:10,happiness:5,xp:0,weight:25},
+      ball:{name:'Pilota',hunger:0,happiness:15,xp:0,weight:20},
+      star:{name:'Estrella',hunger:0,happiness:0,xp:10,weight:10}
+    };
+    const PET_ITEM_ICONS={
+      apple:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8c-4 0-6 3-6 6 0 4 3 7 6 7s6-3 6-7c0-3-2-6-6-6z"/><path d="M12 8c0-3 1-4 3-5"/></svg>',
+      cookie:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M9 10h.01"/><path d="M14.5 9h.01"/><path d="M10 14.5h.01"/><path d="M14 14h.01"/></svg>',
+      ball:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M6.5 6.5a8 8 0 0 1 0 11"/><path d="M17.5 6.5a8 8 0 0 0 0 11"/></svg>',
+      star:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 5.9L12 16.4 6.7 19.3l1.2-5.9L3.4 9.3l6-.7z"/></svg>'
+    };
+    const PET_STAGE_NAMES={egg:'Ou',baby:'Cria',child:'Jove',adult:'Adult'};
+    const PET_HUNGER_DECAY_PER_DAY=15;
+    const PET_HAPPY_DECAY_PER_DAY=10;
+    const PET_MAX_DECAY_DAYS=3;
+    const PET_AWAY_AFTER_MS=2*86400000;
+
+    const PET_SPRITES={
+      egg:[
+        ['............','....####....','..########..','.##########.','.###.##.###.','############','##.##..##.##','############','.##########.','..########..','............','............'],
+        ['............','............','....####....','..########..','.##########.','.###.##.###.','############','##.##..##.##','############','.##########.','..########..','............']
+      ],
+      baby:[
+        ['............','............','...######...','..########..','.##.####.##.','.##########.','.###....###.','.##########.','..########..','...##..##...','............','............'],
+        ['............','............','...######...','..########..','.##########.','.##########.','.###....###.','.##########.','..########..','..##....##..','............','............']
+      ],
+      child:[
+        ['..#......#..','..##....##..','..########..','.##########.','.##.####.##.','.##########.','.###....###.','.##########.','.##########.','..########..','..##....##..','............'],
+        ['..#......#..','..##....##..','..########..','.##########.','.##########.','.##########.','.###....###.','.##########.','.##########.','..########..','...##..##...','............']
+      ],
+      adult:[
+        ['...######...','..########..','.##.####.##.','.##########.','############','#.########.#','#.########.#','..########..','..########..','..###..###..','..##....##..','............'],
+        ['...######...','..########..','.##########.','.##########.','############','#.########.#','#.########.#','..########..','..########..','..###..###..','...##..##...','............']
+      ],
+      away:[
+        ['............','............','....####....','...#....#...','..########..','..#......#..','..#.####.#..','..#......#..','..########..','............','............','............'],
+        ['............','............','....####....','...#....#...','..########..','..#......#..','..#.####.#..','..#......#..','..########..','............','............','............']
+      ]
+    };
+
+    function getPet(){
+      try{return JSON.parse(localStorage.getItem('wisewalk-pet'))}catch(_){return null}
+    }
+    function savePet(pet){localStorage.setItem('wisewalk-pet',JSON.stringify(pet))}
+    function createPet(name){
+      const pet={name:name||'Wisi',bornAt:Date.now(),xp:0,hunger:80,happiness:80,lastTickAt:Date.now(),away:false,hungerZeroSince:null};
+      savePet(pet);
+      return pet;
+    }
+
+    function getPetStage(pet){
+      const xp=pet.xp||0;
+      if(xp>=400)return 'adult';
+      if(xp>=150)return 'child';
+      if(xp>=50)return 'baby';
+      return 'egg';
+    }
+
+    function petStageBounds(stage){
+      if(stage==='egg')return[0,50];
+      if(stage==='baby')return[50,150];
+      if(stage==='child')return[150,400];
+      return[400,400];
+    }
+
+    function applyPetDecay(){
+      const pet=getPet();
+      if(!pet)return null;
+      const now=Date.now();
+      const elapsedDays=Math.min(PET_MAX_DECAY_DAYS,(now-(pet.lastTickAt||now))/86400000);
+      if(elapsedDays>0.01){
+        pet.hunger=Math.max(0,Math.round(pet.hunger-elapsedDays*PET_HUNGER_DECAY_PER_DAY));
+        pet.happiness=Math.max(0,Math.round(pet.happiness-elapsedDays*PET_HAPPY_DECAY_PER_DAY));
+        pet.lastTickAt=now;
+        if(pet.hunger===0){
+          if(!pet.hungerZeroSince)pet.hungerZeroSince=now;
+          else if(now-pet.hungerZeroSince>PET_AWAY_AFTER_MS)pet.away=true;
+        }else{
+          pet.hungerZeroSince=null;
+        }
+        savePet(pet);
+      }
+      return pet;
+    }
+
+    function getInventory(){
+      try{return JSON.parse(localStorage.getItem('wisewalk-pet-items'))||{}}catch(_){return{}}
+    }
+    function saveInventory(inv){localStorage.setItem('wisewalk-pet-items',JSON.stringify(inv))}
+    function addItem(type,qty){
+      if(!PET_ITEMS[type])return;
+      const inv=getInventory();
+      inv[type]=(inv[type]||0)+(qty||1);
+      saveInventory(inv);
+    }
+    function consumeItem(type){
+      const inv=getInventory();
+      if(!inv[type]||inv[type]<=0)return false;
+      inv[type]-=1;
+      saveInventory(inv);
+      return true;
+    }
+
+    function petStatusMessage(pet){
+      if(pet.away)return `${pet.name} se n'ha anat d'excursió. Completa una caminada perquè torni!`;
+      const stage=getPetStage(pet);
+      if(stage==='egg')return 'L\'ou s\'està incubant. Camina per fer-lo eclosionar!';
+      if(pet.hunger<30)return `${pet.name} té gana. Surt a caminar per trobar menjar!`;
+      if(pet.happiness<30)return `${pet.name} s'avorreix. Una caminada l'animarà!`;
+      return `${pet.name} està content de veure't!`;
+    }
+
+    let tamaMsgTimer=null;
+    function setTamaMessage(text,sticky){
+      const el=document.getElementById('tama-msg');
+      if(!el)return;
+      el.textContent=text;
+      if(tamaMsgTimer){clearTimeout(tamaMsgTimer);tamaMsgTimer=null;}
+      if(!sticky){
+        tamaMsgTimer=setTimeout(()=>{
+          tamaMsgTimer=null;
+          const pet=getPet();
+          if(pet)el.textContent=petStatusMessage(pet);
+        },3000);
+      }
+    }
+
+    function drawPetSprite(canvasId,frame){
+      const canvas=document.getElementById(canvasId);
+      const pet=getPet();
+      if(!canvas||!pet)return;
+      const key=pet.away?'away':getPetStage(pet);
+      const frames=PET_SPRITES[key]||PET_SPRITES.egg;
+      const map=frames[frame%frames.length];
+      const ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle=getComputedStyle(html).getPropertyValue('--accent').trim()||'#3d7a6b';
+      map.forEach((row,y)=>{
+        for(let x=0;x<row.length;x++){
+          if(row[x]==='#')ctx.fillRect(x,y,1,1);
+        }
+      });
+    }
+
+    let tamaFrame=0;
+    let tamaAnimId=null;
+    function startTamaAnimation(){
+      stopTamaAnimation();
+      tamaAnimId=setInterval(()=>{
+        tamaFrame=(tamaFrame+1)%2;
+        drawPetSprite('tama-canvas',tamaFrame);
+      },700);
+    }
+    function stopTamaAnimation(){
+      if(tamaAnimId){clearInterval(tamaAnimId);tamaAnimId=null;}
+    }
+
+    function bounceTamaSprite(){
+      const c=document.getElementById('tama-canvas');
+      if(!c)return;
+      c.classList.remove('bounce');
+      void c.offsetWidth;
+      c.classList.add('bounce');
+    }
+
+    function addPetXp(amount){
+      const pet=getPet();
+      if(!pet)return;
+      const before=getPetStage(pet);
+      pet.xp=(pet.xp||0)+amount;
+      savePet(pet);
+      const after=getPetStage(pet);
+      if(after!==before){
+        bounceTamaSprite();
+        setTamaMessage(after==='baby'
+          ?`L'ou ha eclosionat! Hola, ${pet.name}!`
+          :`${pet.name} ha evolucionat: ara és ${PET_STAGE_NAMES[after].toLowerCase()}!`);
+      }
+    }
+
+    function useItemOnPet(type){
+      const pet=getPet();
+      const def=PET_ITEMS[type];
+      if(!pet||!def)return;
+      if(pet.away){setTamaMessage(`${pet.name} és d'excursió i no et sent...`);return;}
+      if(getPetStage(pet)==='egg'&&def.xp===0){
+        setTamaMessage('Encara és un ou! Les estrelles i caminar l\'ajuden a eclosionar.');
+        return;
+      }
+      if(!consumeItem(type)){
+        setTamaMessage(`No tens cap ${def.name.toLowerCase()}. Troba'n a les rutes!`);
+        return;
+      }
+      pet.hunger=Math.min(100,pet.hunger+def.hunger);
+      pet.happiness=Math.min(100,pet.happiness+def.happiness);
+      savePet(pet);
+      if(def.xp)addPetXp(def.xp);
+      bounceTamaSprite();
+      if(def.hunger>0)setTamaMessage(`Nyam! ${def.name} +${def.hunger} de menjar.`);
+      else if(def.happiness>0)setTamaMessage(`${pet.name} s'ho passa pipa! +${def.happiness} de felicitat.`);
+      else setTamaMessage(`+${def.xp} XP!`);
+      updatePetUi();
+    }
+
+    /* Cridat quan es reclama una anada o tornada: XP i retorn d'excursió */
+    function notifyPetWalkCompleted(){
+      const pet=getPet();
+      if(!pet)return;
+      if(pet.away){
+        pet.away=false;
+        pet.hungerZeroSince=null;
+        pet.hunger=Math.max(pet.hunger,40);
+        pet.happiness=Math.max(pet.happiness,50);
+        savePet(pet);
+        setTamaMessage(`${pet.name} ha tornat de l'excursió amb tu!`);
+      }
+      addPetXp(10);
+      updatePetUi();
+    }
+
+    function renderPetInventory(){
+      const box=document.getElementById('pet-inventory');
+      if(!box)return;
+      const inv=getInventory();
+      box.innerHTML='';
+      Object.keys(PET_ITEMS).forEach(type=>{
+        const def=PET_ITEMS[type];
+        const qty=inv[type]||0;
+        const effects=[];
+        if(def.hunger)effects.push(`+${def.hunger} menjar`);
+        if(def.happiness)effects.push(`+${def.happiness} felicitat`);
+        if(def.xp)effects.push(`+${def.xp} XP`);
+        const b=document.createElement('button');
+        b.type='button';
+        b.className='pet-item'+(qty?'':' empty');
+        b.title=effects.join(' · ');
+        b.innerHTML=`${PET_ITEM_ICONS[type]}<span class="pet-item-name">${def.name}</span><span class="pet-item-qty">×${qty}</span>`;
+        b.addEventListener('click',()=>useItemOnPet(type));
+        box.appendChild(b);
+      });
+    }
+
+    function updatePetUi(){
+      const pet=applyPetDecay();
+      const hasPet=!!pet;
+      const btn=document.getElementById('btnPet');
+      const card=document.getElementById('card-pet');
+      if(btn)btn.style.display=hasPet?'flex':'none';
+      if(card)card.style.display=hasPet?'block':'none';
+      if(!hasPet)return;
+
+      const needsCare=pet.away||pet.hunger<30||pet.happiness<30;
+      const dot=document.getElementById('pet-dot');
+      if(dot)dot.style.display=needsCare?'block':'none';
+
+      const nameEl=document.getElementById('pet-status-name');
+      const msgEl=document.getElementById('pet-status-msg');
+      if(nameEl)nameEl.textContent=pet.name;
+      if(msgEl)msgEl.textContent=petStatusMessage(pet);
+      drawPetSprite('pet-mini-canvas',0);
+
+      const stage=getPetStage(pet);
+      const titleEl=document.getElementById('pet-title');
+      const stageEl=document.getElementById('pet-stage-label');
+      if(titleEl)titleEl.textContent=pet.name;
+      if(stageEl)stageEl.textContent=`Etapa: ${PET_STAGE_NAMES[stage]} · ${pet.xp||0} XP`;
+
+      const setBar=(barId,valId,value,max,valText)=>{
+        const bar=document.getElementById(barId);
+        const val=document.getElementById(valId);
+        if(bar)bar.style.width=`${max>0?Math.min(100,(value/max)*100):100}%`;
+        if(val)val.textContent=valText;
+      };
+      setBar('bar-hunger','val-hunger',pet.hunger,100,`${pet.hunger}/100`);
+      setBar('bar-happy','val-happy',pet.happiness,100,`${pet.happiness}/100`);
+      const [minXp,nextXp]=petStageBounds(stage);
+      if(stage==='adult'){
+        setBar('bar-xp','val-xp',1,1,`${pet.xp} XP`);
+      }else{
+        setBar('bar-xp','val-xp',(pet.xp||0)-minXp,nextXp-minXp,`${pet.xp||0} / ${nextXp}`);
+      }
+
+      const tamaMsg=document.getElementById('tama-msg');
+      if(tamaMsg&&!tamaMsgTimer)tamaMsg.textContent=petStatusMessage(pet);
+      renderPetInventory();
+      drawPetSprite('tama-canvas',tamaFrame);
+    }
+
+    function refreshPetSprites(){
+      if(getPet()){
+        drawPetSprite('pet-mini-canvas',0);
+        drawPetSprite('tama-canvas',tamaFrame);
+      }
     }
 
     function getLegData(leg){
@@ -1608,6 +1985,7 @@
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
+      notifyPetWalkCompleted();
       walkSession.outboundClaimed=true;
       saveWalkSession();
 
@@ -1647,6 +2025,7 @@
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
+      notifyPetWalkCompleted();
       walkSession.returnClaimed=true;
       saveWalkSession();
       setRouteInfoText(`Tornada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h.`);
@@ -1893,6 +2272,40 @@
     btnDebugDestination.addEventListener('click',jumpToDestination);
     btnDebugOrigin.addEventListener('click',jumpToOrigin);
     btnDebugExport.addEventListener('click',exportDebugLogs);
+    document.getElementById('btn-debug-pet').addEventListener('click',()=>{
+      let pet=getPet();
+      if(!pet){
+        pet=createPet('Wisi');
+        Object.keys(PET_ITEMS).forEach(t=>addItem(t,2));
+        debugLog('Mascota creada amb 2 de cada element');
+      }else{
+        addPetXp(10);
+        Object.keys(PET_ITEMS).forEach(t=>addItem(t,1));
+        debugLog(`+10 XP (total ${getPet().xp}) i +1 de cada element`);
+      }
+      updatePetUi();
+    });
+    document.getElementById('btnPet').addEventListener('click',()=>showScreen('pet'));
+    document.getElementById('pet-status-btn').addEventListener('click',()=>showScreen('pet'));
+    document.getElementById('btn-pet-back').addEventListener('click',()=>showScreen('main'));
+    document.getElementById('tama-btn-feed').addEventListener('click',()=>{
+      const inv=getInventory();
+      const type=inv.apple>0?'apple':inv.cookie>0?'cookie':null;
+      if(!type){setTamaMessage('No tens menjar. Troba\'n a les rutes!');return;}
+      useItemOnPet(type);
+    });
+    document.getElementById('tama-btn-play').addEventListener('click',()=>{
+      const inv=getInventory();
+      if(inv.ball>0)useItemOnPet('ball');
+      else setTamaMessage('No tens cap pilota. Troba\'n a les rutes!');
+    });
+    document.getElementById('tama-btn-status').addEventListener('click',()=>{
+      const pet=getPet();
+      if(pet)setTamaMessage(`Menjar ${pet.hunger}/100 · Felicitat ${pet.happiness}/100 · ${pet.xp||0} XP`);
+    });
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden)updatePetUi();
+    });
 
     /* ---- Lògica del Selector de Mapa (Pin Arrossegable) ---- */
     const mapPickerCrosshair=document.getElementById('map-picker-crosshair');
@@ -1962,6 +2375,7 @@
     setColorTheme(localStorage.getItem('wisewalk-color')||'green');
 
     updateAllAddressStatusUi();
+    updatePetUi();
 
     /* Restore route coordinates for screen-off survival */
     restoreRouteCoordinates();
