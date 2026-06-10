@@ -66,6 +66,16 @@
     .route-details{display:none;grid-template-columns:1fr 1fr;gap:.5rem;margin:.75rem 0}
     .route-detail{text-align:center;background:var(--accent-light);border-radius:12px;padding:.6rem .4rem}
     .route-detail-value{font-weight:700;color:var(--accent);font-size:1.05rem}.route-detail-label{font-size:.7rem;color:var(--text-soft)}
+    .route-options{display:none;grid-template-columns:1fr;gap:.5rem;margin:.75rem 0}
+    .route-option{display:flex;align-items:center;gap:.75rem;width:100%;padding:.7rem .85rem;background:var(--bg-card);border:2px solid var(--border);border-radius:14px;cursor:pointer;font-family:'Roboto Flex',sans-serif;color:var(--text);text-align:left;transition:all .2s}
+    .route-option:active{transform:scale(.99)}
+    .route-option.active{border-color:var(--accent);background:var(--accent-light)}
+    .route-option:disabled{opacity:.55;cursor:default}
+    .route-option-dir{width:34px;height:34px;border-radius:10px;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .route-option.active .route-option-dir{background:var(--accent);color:#fff}
+    .route-option-dir svg{width:17px;height:17px}
+    .route-option-title{display:block;font-weight:600;font-size:.9rem}
+    .route-option-meta{display:block;font-size:.75rem;color:var(--text-soft)}
 
     .hero-ring-wrap{display:flex;justify-content:center;margin-top:.25rem}
     .hero-ring{position:relative;width:172px;height:172px}
@@ -109,6 +119,7 @@
     body.map-mode .route-container.walk-empty{display:none}
     body.map-mode #route-info{display:none}
     body.map-mode .route-details{display:none!important}
+    body.map-mode .route-options{display:none!important}
     body.map-mode #btn-generate-route{display:none!important}
     body.map-mode .result-header{display:none!important}
     .walk-info-box{display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;padding:10px 22px;border-radius:14px;z-index:1001;text-align:center;backdrop-filter:blur(6px);min-width:140px}
@@ -175,13 +186,6 @@
           <div class="form-group"><label for="weight-setup">Pes</label><div class="input-wrapper"><input type="number" id="weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="70" required><span class="unit">kg</span></div></div>
           <div class="form-group"><label for="target-weight-setup">Pes objectiu</label><div class="input-wrapper"><input type="number" id="target-weight-setup" inputmode="decimal" min="30" max="300" step="0.1" value="65" required><span class="unit">kg</span></div></div>
           <div class="form-group">
-            <label>Horari de son</label>
-            <div class="time-inputs">
-              <div><label for="wake-setup" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-setup" value="07:00" required></div>
-              <div><label for="sleep-setup" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-setup" value="23:00" required></div>
-            </div>
-          </div>
-          <div class="form-group">
             <label>Punt d'inici de ruta (opcional)</label>
             <button type="button" class="address-gps-btn" style="margin-top:.5rem" onclick="openLocationPicker()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg> Fixar el punt d'inici aquí</button>
             <div class="address-status" id="address-status-setup">Les rutes començaran des del GPS en temps real.</div>
@@ -232,9 +236,10 @@
         </div>
       </section>
       <section class="card" id="card-route">
-        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Ruta circular d'uns 3 km des d'on ets</div></div></div>
+        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 destinacions en direccions diferents</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Genera una ruta sorpresa i surt a caminar.</div>
+          <div class="route-options" id="route-options" style="display:none"></div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància</div></div>
             <div class="route-detail"><div class="route-detail-value" id="route-time">— min</div><div class="route-detail-label">temps estimat</div></div>
@@ -274,13 +279,6 @@
           <div class="form-group"><label for="height-config">Alçada</label><div class="input-wrapper"><input type="number" id="height-config" inputmode="numeric" min="100" max="250" required><span class="unit">cm</span></div></div>
           <div class="form-group"><label for="weight-config">Pes</label><div class="input-wrapper"><input type="number" id="weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
           <div class="form-group"><label for="target-weight-config">Pes objectiu</label><div class="input-wrapper"><input type="number" id="target-weight-config" inputmode="decimal" min="30" max="300" step="0.1" required><span class="unit">kg</span></div></div>
-          <div class="form-group">
-            <label>Horari de son</label>
-            <div class="time-inputs">
-              <div><label for="wake-config" style="font-size:.75rem;color:var(--text-soft)">Em llevo</label><input type="time" id="wake-config" required></div>
-              <div><label for="sleep-config" style="font-size:.75rem;color:var(--text-soft)">Vaig a dormir</label><input type="time" id="sleep-config" required></div>
-            </div>
-          </div>
           <button type="submit" class="btn">Desar canvis</button>
         </form>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Tornar</button>
@@ -345,7 +343,8 @@
     let debugPanelVisible=debugModeFromQuery;
     let userLocation=null;
     let currentRoute=null;
-    let previousDestination=null;
+    let routeOptions=[];
+    let selectedOptionIdx=-1;
     let currentRouteMetrics=null;
     let walkSession=null;
     let walkWatchId=null;
@@ -629,8 +628,6 @@
       document.getElementById('height-config').value=profile.heightCm;
       document.getElementById('weight-config').value=profile.weightKg;
       document.getElementById('target-weight-config').value=profile.targetWeightKg||profile.weightKg;
-      document.getElementById('wake-config').value=profile.wakeTime;
-      document.getElementById('sleep-config').value=profile.sleepTime;
       document.getElementById(profile.sex==='F'?'sex-f-config':'sex-m-config').checked=true;
       updateAddressStatusUi('config');
       updateCalorieGoals();
@@ -696,31 +693,9 @@
       return lon;
     }
 
-    /* ---- Balanced direction generation ---- */
-    const DIRECTION_SECTORS=8;
-    let directionQueue=[];
-
-    function getBalancedBearing(){
-      if(directionQueue.length===0){
-        /* Build shuffled list of sector center bearings */
-        const sectors=[];
-        const sectorSize=(2*Math.PI)/DIRECTION_SECTORS;
-        for(let i=0;i<DIRECTION_SECTORS;i++){
-          sectors.push(sectorSize*i+sectorSize*Math.random());
-        }
-        /* Fisher-Yates shuffle */
-        for(let i=sectors.length-1;i>0;i--){
-          const j=Math.floor(Math.random()*(i+1));
-          [sectors[i],sectors[j]]=[sectors[j],sectors[i]];
-        }
-        directionQueue=sectors;
-      }
-      return directionQueue.pop();
-    }
-
-    function calculateRandomDestination(start,distanceMeters){
+    /* ---- Direction helpers ---- */
+    function destinationFromBearing(start,distanceMeters,bearing){
       const earthRadius=6371000;
-      const bearing=getBalancedBearing();
       const lat1=start.lat*Math.PI/180;
       const lon1=start.lng*Math.PI/180;
       const angularDistance=distanceMeters/earthRadius;
@@ -735,6 +710,15 @@
       );
 
       return {lat:lat2*180/Math.PI,lng:normalizeLongitude(lon2*180/Math.PI)};
+    }
+
+    function bearingToDegrees(bearing){
+      return ((bearing*180/Math.PI)%360+360)%360;
+    }
+
+    function bearingLabel(bearing){
+      const dirs=['al nord','al nord-est','a l\'est','al sud-est','al sud','al sud-oest','a l\'oest','al nord-oest'];
+      return dirs[Math.round(bearingToDegrees(bearing)/45)%8];
     }
 
     function getMockProfile(){
@@ -862,7 +846,6 @@
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
         currentRoute={start:newStart,end:newDestination};
-        previousDestination=newDestination;
 
         sendRouteToNative(outboundCoordinates);
 
@@ -1126,6 +1109,18 @@
       'https://routing.openstreetmap.de/routed-foot/route/v1/foot'
     ];
     const ROUTE_REQUEST_TIMEOUT_MS=12000;
+    /* Remember which OSRM endpoint answered last, so parallel requests don't
+       all burn a timeout on a server that is down */
+    let preferredOsrmIdx=0;
+
+    function orderedOsrmEndpoints(){
+      return OSRM_ROUTE_ENDPOINTS.map((_,i)=>OSRM_ROUTE_ENDPOINTS[(preferredOsrmIdx+i)%OSRM_ROUTE_ENDPOINTS.length]);
+    }
+
+    function rememberOsrmEndpoint(baseUrl){
+      const idx=OSRM_ROUTE_ENDPOINTS.indexOf(baseUrl);
+      if(idx>=0)preferredOsrmIdx=idx;
+    }
 
     function buildOsrmRadiuses(points){
       if(!selectedAddress)return '';
@@ -1142,7 +1137,7 @@
 
     async function fetchRouteWithOsrm(start,end){
       let lastError=null;
-      for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
+      for(const baseUrl of orderedOsrmEndpoints()){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
         const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,end])}`;
@@ -1155,6 +1150,7 @@
           }
           const data=await response.json();
           if(data&&Array.isArray(data.routes)&&data.routes.length){
+            rememberOsrmEndpoint(baseUrl);
             return data;
           }
           throw new Error('Resposta de rutes buida');
@@ -1194,7 +1190,7 @@
 
     async function fetchRouteWithWaypoint(start,waypoint,end){
       let lastError=null;
-      for(const baseUrl of OSRM_ROUTE_ENDPOINTS){
+      for(const baseUrl of orderedOsrmEndpoints()){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
         const url=`${baseUrl}/${start.lng},${start.lat};${waypoint.lng},${waypoint.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,waypoint,end])}`;
@@ -1202,7 +1198,10 @@
           const response=await fetch(url,{signal:controller.signal});
           if(!response.ok)throw new Error(`OSRM ${response.status}`);
           const data=await response.json();
-          if(data&&Array.isArray(data.routes)&&data.routes.length)return data;
+          if(data&&Array.isArray(data.routes)&&data.routes.length){
+            rememberOsrmEndpoint(baseUrl);
+            return data;
+          }
           throw new Error('Resposta buida');
         }catch(err){lastError=err;}finally{clearTimeout(timeoutId);}
       }
@@ -1242,93 +1241,99 @@
       }
     }
 
-    const MAX_ROUTE_ATTEMPTS=8;
-    const GLOBAL_ROUTE_TIMEOUT_MS=30000;
+    const ROUTE_OPTION_COUNT=3;
 
-    async function generateRouteFromLocation(start,overrideOutboundM){
-      const effectiveOutboundM=overrideOutboundM||TARGET_OUTBOUND_DISTANCE_M;
-      const effectiveTotalKm=(effectiveOutboundM*2)/1000;
-      let targetDistanceMeters=effectiveOutboundM/URBAN_TORTUOSITY_FACTOR;
-      let chosenData=null;
-      let chosenDestination=null;
-      let bestData=null;
-      let bestDestination=null;
-      let bestDiff=Infinity;
-      let lastRouteError=null;
-      const globalDeadline=Date.now()+GLOBAL_ROUTE_TIMEOUT_MS;
+    /* Fetches one walkable route towards a fixed bearing and returns it as a
+       candidate with its real on-foot distance */
+    async function fetchCandidateRoute(start,bearing,radiusM){
+      const destination=destinationFromBearing(start,radiusM,bearing);
+      const data=await fetchRouteWithOsrm(start,destination);
+      const route=data.routes[0];
+      if(!route||typeof route.distance!=='number')throw new Error('Ruta invàlida');
+      const coords=route.geometry&&route.geometry.coordinates;
+      if(!coords||coords.length<2)throw new Error('Geometria invàlida');
+      return {
+        data,
+        bearing,
+        coords,
+        distanceM:route.distance,
+        destination:{lat:coords[coords.length-1][1],lng:coords[coords.length-1][0]}
+      };
+    }
 
-      for(let attempt=0;attempt<MAX_ROUTE_ATTEMPTS;attempt++){
-        if(Date.now()>=globalDeadline){
-          debugLog(`generateRouteFromLocation: timeout global de ${GLOBAL_ROUTE_TIMEOUT_MS/1000}s excedit`);
-          break;
-        }
-        const destination=calculateRandomDestination(start,targetDistanceMeters);
-        if(previousDestination){
-          const distFromPrev=haversineDistance(
-            previousDestination.lat,previousDestination.lng,
-            destination.lat,destination.lng
-          );
-          if(distFromPrev<90)continue;
-        }
-
-        let data;
-        try{
-          debugLog(`Intent ${attempt+1}/${MAX_ROUTE_ATTEMPTS}: radi línia recta ${Math.round(targetDistanceMeters)}m`);
-          data=await fetchRouteWithOsrm(start,destination);
-        }catch(err){
-          debugLog(`Intent ${attempt+1} fallit: ${(err&&err.message)||err}`);
-          lastRouteError=err;
-          continue;
-        }
-        if(!data.routes||data.routes.length===0)continue;
-
-        const route=data.routes[0];
-        if(typeof route.distance!=='number')continue;
-
-        const totalDistanceKm=(route.distance*2)/1000;
-        const currentDiff=Math.abs(totalDistanceKm-effectiveTotalKm);
-        if(currentDiff<bestDiff){
-          bestDiff=currentDiff;
-          bestData=data;
-          const geom=route.geometry.coordinates;
-          bestDestination={lat:geom[geom.length-1][1],lng:geom[geom.length-1][0]};
-        }
-        debugLog(`Intent ${attempt+1}: distància total ${totalDistanceKm.toFixed(2)} km (objectiu ${effectiveTotalKm.toFixed(1)} ±${DISTANCE_TOLERANCE_KM})`);
-        if(currentDiff<=DISTANCE_TOLERANCE_KM){
-          const geometry=route.geometry;
-          const snappedEndCoords=geometry&&geometry.coordinates&&geometry.coordinates.length
-            ?geometry.coordinates[geometry.coordinates.length-1]
-            :null;
-          if(!snappedEndCoords||snappedEndCoords.length<2)continue;
-          chosenData=data;
-          chosenDestination={lat:snappedEndCoords[1],lng:snappedEndCoords[0]};
-          debugLog(`Ruta trobada a l'intent ${attempt+1}: ${totalDistanceKm.toFixed(2)} km`);
-          break;
-        }
-
-        const actualOutboundM=route.distance;
-        const targetOutboundM=effectiveOutboundM;
-        const correctionRatio=targetOutboundM/actualOutboundM;
-        targetDistanceMeters=targetDistanceMeters*correctionRatio;
-        const minRadius=300;
-        const maxRadius=effectiveOutboundM*1.5;
-        if(targetDistanceMeters<minRadius)targetDistanceMeters=minRadius;
-        if(targetDistanceMeters>maxRadius)targetDistanceMeters=maxRadius;
+    /* Generates ROUTE_OPTION_COUNT candidate destinations spread evenly
+       around the compass (random base rotation + one sector each, with
+       jitter), fetched in parallel. Candidates too far from the target
+       distance get a single corrective retry, also in parallel. */
+    async function generateRouteOptions(start){
+      const targetM=TARGET_OUTBOUND_DISTANCE_M;
+      const radius=targetM/URBAN_TORTUOSITY_FACTOR;
+      const sector=(2*Math.PI)/ROUTE_OPTION_COUNT;
+      const base=Math.random()*2*Math.PI;
+      const bearings=[];
+      for(let i=0;i<ROUTE_OPTION_COUNT;i++){
+        bearings.push(base+sector*i+(Math.random()-0.5)*sector*0.5);
       }
 
-      if(!chosenData||!chosenDestination){
-        if(bestData&&bestDestination){
-          chosenData=bestData;
-          chosenDestination=bestDestination;
-          debugLog(`Acceptant la millor ruta trobada com a fallback (Diff: ${bestDiff.toFixed(2)} km)`);
+      const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius)));
+      const options=[];
+      const retries=[];
+      results.forEach((r,i)=>{
+        if(r.status!=='fulfilled'){
+          debugLog(`Opció ${i+1} fallida: ${(r.reason&&r.reason.message)||r.reason}`);
+          retries.push({bearing:bearings[i],radius:radius*0.8,fallback:null});
+          return;
+        }
+        const cand=r.value;
+        const diffKm=Math.abs(cand.distanceM-targetM)/1000;
+        if(diffKm<=DISTANCE_TOLERANCE_KM){
+          options.push(cand);
         }else{
-          if(lastRouteError){
-            throw new Error(lastRouteError.message||'No s\'ha pogut contactar amb OpenStreetMap per generar la ruta.');
-          }
-          throw new Error('No s\'ha pogut generar cap ruta vàlida. Torna-ho a provar.');
+          const corrected=Math.min(Math.max(radius*(targetM/cand.distanceM),300),targetM*1.5);
+          retries.push({bearing:cand.bearing,radius:corrected,fallback:cand});
         }
+      });
+
+      if(retries.length){
+        const retryResults=await Promise.allSettled(retries.map(r=>fetchCandidateRoute(start,r.bearing,r.radius)));
+        retryResults.forEach((r,i)=>{
+          if(r.status==='fulfilled')options.push(r.value);
+          else if(retries[i].fallback)options.push(retries[i].fallback);
+        });
       }
-      return {data:chosenData,destination:chosenDestination};
+
+      if(!options.length){
+        throw new Error('No s\'ha pogut generar cap ruta. Comprova la connexió i torna-ho a provar.');
+      }
+
+      /* Stable display order: clockwise from north */
+      options.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
+      return options.slice(0,ROUTE_OPTION_COUNT);
+    }
+
+    /* Single best route towards any direction (used by the mid-walk
+       recalculation): three parallel candidates, keep the closest match */
+    async function generateRouteFromLocation(start,overrideOutboundM){
+      const targetM=overrideOutboundM||TARGET_OUTBOUND_DISTANCE_M;
+      const radius=Math.max(120,targetM/URBAN_TORTUOSITY_FACTOR);
+      const base=Math.random()*2*Math.PI;
+      const sector=(2*Math.PI)/3;
+      const bearings=[base,base+sector,base+2*sector];
+
+      const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius)));
+      let best=null;
+      let bestDiff=Infinity;
+      let lastError=null;
+      results.forEach(r=>{
+        if(r.status!=='fulfilled'){lastError=r.reason;return;}
+        const diff=Math.abs(r.value.distanceM-targetM);
+        if(diff<bestDiff){bestDiff=diff;best=r.value;}
+      });
+
+      if(!best){
+        throw new Error((lastError&&lastError.message)||'No s\'ha pogut generar cap ruta vàlida. Torna-ho a provar.');
+      }
+      return {data:best.data,destination:best.destination};
     }
 
     function setRouteUserLocation(lat,lng){
@@ -1445,35 +1450,63 @@
       }
     }
 
-    async function generateRandomRoute(){
-      const origin=getRouteOrigin();
-      if(!origin){
-        pendingRouteGeneration=true;
-        setRouteInfoText('Obtenint ubicació per generar la ruta...');
-        getLocation();
-        return;
-      }
-      setRouteInfoText('Calculant camins...');
-      btnGenerateRoute.disabled=true;
+    function hideRouteOptions(){
+      routeOptions=[];
+      selectedOptionIdx=-1;
+      const box=document.getElementById('route-options');
+      if(box){box.innerHTML='';box.style.display='none';}
+    }
+
+    function renderRouteOptions(){
+      const box=document.getElementById('route-options');
+      if(!box)return;
+      box.innerHTML='';
+      routeOptions.forEach((opt,idx)=>{
+        const totalKm=(opt.distanceM*2)/1000;
+        const est=calculateRouteCalories(getCalorieProfile(),totalKm,0,5.0);
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.className='route-option'+(idx===selectedOptionIdx?' active':'');
+        btn.innerHTML=`
+          <span class="route-option-dir"><svg viewBox="0 0 24 24" style="transform:rotate(${Math.round(bearingToDegrees(opt.bearing))}deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
+          <span>
+            <span class="route-option-title">Cap ${bearingLabel(opt.bearing)}</span>
+            <span class="route-option-meta">${formatDecimal(totalKm.toFixed(1))} km · ~${est.minutes} min · ~${est.kcal} kcal</span>
+          </span>`;
+        btn.addEventListener('click',()=>selectRouteOption(idx));
+        box.appendChild(btn);
+      });
+      box.style.display=routeOptions.length?'grid':'none';
+    }
+
+    function setRouteOptionsEnabled(enabled){
+      document.querySelectorAll('.route-option').forEach(b=>{b.disabled=!enabled;});
+    }
+
+    async function selectRouteOption(idx){
+      const opt=routeOptions[idx];
+      if(!opt||idx===selectedOptionIdx)return;
+      selectedOptionIdx=idx;
+      document.querySelectorAll('.route-option').forEach((b,i)=>b.classList.toggle('active',i===idx));
+      setRouteOptionsEnabled(false);
+      setRouteInfoText('Preparant la ruta...');
+      routeDetails.style.display='none';
+      setWalkButtonsVisibility({});
 
       try{
-        const routeResult=await generateRouteFromLocation(origin);
-        const route=routeResult.data.routes[0];
-        const coords=route.geometry&&route.geometry.coordinates||[];
+        outboundCoordinates=opt.coords;
+        currentRoute={start:opt.origin,end:opt.destination};
 
-        outboundCoordinates=coords;
-        currentRoute={start:origin,end:routeResult.destination};
-        previousDestination=routeResult.destination;
-
-        setRouteInfoText('Calculant ruta de tornada...');
-        const retCoords=await generateReturnRoute(routeResult.destination,origin);
-        returnCoordinates=retCoords||[...coords].reverse();
+        /* Return route and elevation fetched in parallel */
+        const [retCoords,totalPositiveGainM]=await Promise.all([
+          generateReturnRoute(opt.destination,opt.origin),
+          fetchElevationGain(opt.coords)
+        ]);
+        returnCoordinates=retCoords||[...opt.coords].reverse();
 
         const outboundDistM=calculatePolylineDistance(outboundCoordinates);
         const returnDistM=calculatePolylineDistance(returnCoordinates);
         const totalDistanceKm=(outboundDistM+returnDistM)/1000;
-
-        const totalPositiveGainM=await fetchElevationGain(coords);
         const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
@@ -1481,7 +1514,7 @@
 
         walkSession=null;
         saveWalkSession();
-        localStorage.setItem('wisewalk-last-origin',JSON.stringify(origin));
+        localStorage.setItem('wisewalk-last-origin',JSON.stringify(opt.origin));
         saveRouteCoordinates();
 
         document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
@@ -1491,7 +1524,39 @@
 
         routeDetails.style.display='grid';
         setWalkButtonsVisibility({start:true});
-        setRouteInfoText('Ruta generada amb camí d\'anada i tornada diferent.');
+        setRouteInfoText('Ruta a punt. Prem "Iniciar caminada".');
+      }catch(err){
+        debugLog('Error a selectRouteOption');
+        debugLog((err&&err.stack)||err);
+        selectedOptionIdx=-1;
+        document.querySelectorAll('.route-option').forEach(b=>b.classList.remove('active'));
+        setRouteInfoText(err.message||'Error en preparar la ruta.');
+      }finally{
+        setRouteOptionsEnabled(true);
+      }
+    }
+
+    async function generateRandomRoute(){
+      const origin=getRouteOrigin();
+      if(!origin){
+        pendingRouteGeneration=true;
+        setRouteInfoText('Obtenint ubicació per generar la ruta...');
+        getLocation();
+        return;
+      }
+      setRouteInfoText('Buscant destinacions al teu voltant...');
+      btnGenerateRoute.disabled=true;
+      hideRouteOptions();
+      routeDetails.style.display='none';
+      setWalkButtonsVisibility({});
+
+      try{
+        const options=await generateRouteOptions(origin);
+        options.forEach(o=>{o.origin=origin;});
+        routeOptions=options;
+        selectedOptionIdx=-1;
+        renderRouteOptions();
+        setRouteInfoText(options.length>1?'Tria cap a on vols caminar:':'Només s\'ha trobat una destinació:');
       }catch(err){
         debugLog('Error a generateRandomRoute');
         debugLog((err&&err.stack)||err);
@@ -1618,14 +1683,14 @@
 
     function simulateRouteAndLocation(){
       const simulatedOrigin={lat:41.3874,lng:2.1686};
-      const simulatedDestination=calculateRandomDestination(simulatedOrigin,TARGET_OUTBOUND_DISTANCE_M);
+      const simulatedDestination=destinationFromBearing(simulatedOrigin,TARGET_OUTBOUND_DISTANCE_M,Math.random()*2*Math.PI);
       const totalDistanceKm=TARGET_TOTAL_DISTANCE_KM;
       const totalPositiveGainM=72;
       const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
       userLocation={lat:simulatedOrigin.lat,lng:simulatedOrigin.lng};
       currentRoute={start:simulatedOrigin,end:simulatedDestination};
-      previousDestination=simulatedDestination;
+      hideRouteOptions();
       currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM};
       walkSession=null;
       setMapMode(false);
@@ -1703,11 +1768,8 @@
         ageYears:document.getElementById(`age-${prefix}`).value,
         heightCm:document.getElementById(`height-${prefix}`).value,
         weightKg:document.getElementById(`weight-${prefix}`).value,
-        targetWeightKg:document.getElementById(`target-weight-${prefix}`).value,
-        wakeTime:document.getElementById(`wake-${prefix}`).value,
-        sleepTime:document.getElementById(`sleep-${prefix}`).value
+        targetWeightKg:document.getElementById(`target-weight-${prefix}`).value
       });
-      updateConfigSummary();
       updateCalorieGoals();
     }
 
