@@ -17,10 +17,16 @@ import java.lang.ref.WeakReference
  * Destination marker: an accent-colored map pin with a white core, soft
  * ground shadow, expanding ripple rings and a Pokémon GO-style drop-in
  * bounce when it first appears.
+ * With [markerStyle] = "egg" it renders a mystery egg instead of the pin
+ * (used until the user adopts the Tamagotchi pet).
  */
 class PulsingMarkerOverlay(
     private var position: GeoPoint
 ) : Overlay() {
+
+    /** "flag" (default pin) or "egg". */
+    @Volatile
+    var markerStyle: String = "flag"
 
     private val pinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
@@ -135,8 +141,14 @@ class PulsingMarkerOverlay(
             )
         }
 
-        // Drop-in offset (pin falls from above and bounces on landing)
+        // Drop-in offset (marker falls from above and bounces on landing)
         val dropOffset = (1f - dropProgress) * dropHeightDp * density
+
+        if (markerStyle == "egg") {
+            drawEgg(canvas, x, y, density, accent, dropOffset)
+            return
+        }
+
         val headCenterY = y - stemLength - headRadius - dropOffset
 
         // Stem connecting the head to the ground point
@@ -154,5 +166,25 @@ class PulsingMarkerOverlay(
         ringPaint.strokeWidth = ringWidthDp * density
         canvas.drawCircle(x, headCenterY, headRadius, ringPaint)
         canvas.drawCircle(x, headCenterY, coreRadiusDp * density, corePaint)
+    }
+
+    /** Mystery egg: white oval with accent spots resting on the ground point. */
+    private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, accent: Int, dropOffset: Float) {
+        val eggWidth = 19f * density
+        val eggHeight = 24f * density
+        val bottom = y - dropOffset
+        val top = bottom - eggHeight
+        val rect = RectF(x - eggWidth / 2f, top, x + eggWidth / 2f, bottom)
+
+        canvas.drawOval(rect, corePaint)
+        ringPaint.color = accent
+        ringPaint.strokeWidth = 2.5f * density
+        canvas.drawOval(rect, ringPaint)
+        ringPaint.color = Color.WHITE
+
+        pinPaint.color = accent
+        canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 2.4f * density, pinPaint)
+        canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 1.9f * density, pinPaint)
+        canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 1.5f * density, pinPaint)
     }
 }

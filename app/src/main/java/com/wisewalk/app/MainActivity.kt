@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var routePolyline: ArrowRouteOverlay? = null
     private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
+    private var destinationMarkerStyle: String = "flag"
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var copyrightOverlay: CopyrightOverlay? = null
     private var lastBearing: Float = 0f
@@ -683,6 +684,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         // Add pulsing destination marker at last point
                         destinationMarker?.stopAnimation()
                         val marker = PulsingMarkerOverlay(points.last())
+                        marker.markerStyle = destinationMarkerStyle
                         destinationMarker = marker
                         mapView.overlays.add(marker)
                         marker.startAnimation(mapView)
@@ -1037,6 +1039,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.destinationMarker?.stopAnimation()
                     activity.routePolyline?.stopAnimation()
                     activity.snappedLocationOverlay?.stopAnimation()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun setDestinationMarkerStyle(style: String) {
+            activity.runOnUiThread {
+                activity.destinationMarkerStyle = if (style == "egg") "egg" else "flag"
+                activity.destinationMarker?.let {
+                    it.markerStyle = activity.destinationMarkerStyle
+                    activity.mapView.invalidate()
                 }
             }
         }

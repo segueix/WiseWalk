@@ -105,6 +105,15 @@
     .pet-item.empty{opacity:.45}
     .pet-item:active{transform:scale(.97)}
     body.map-mode #card-pet{display:none!important}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1100;display:none;align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(3px)}
+    .modal-backdrop.visible{display:flex}
+    .modal-card{background:var(--bg-card);border-radius:20px;padding:1.75rem 1.5rem;max-width:340px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+    .modal-card h2{font-size:1.2rem;margin-bottom:.35rem}
+    .egg-modal-canvas{width:96px;height:96px;image-rendering:pixelated;margin:0 auto .85rem;display:block;animation:eggWobble 1.6s ease-in-out infinite}
+    @keyframes eggWobble{0%,100%{transform:rotate(0)}25%{transform:rotate(-7deg)}75%{transform:rotate(7deg)}}
+    .egg-name-label{display:block;font-size:.8rem;color:var(--text-soft);margin-top:1.1rem;margin-bottom:.4rem}
+    .egg-name-input{width:100%;padding:.85rem 1rem;border:2px solid var(--border);border-radius:14px;font-size:1rem;text-align:center;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text)}
+    .egg-name-input:focus{outline:none;border-color:var(--accent)}
 
     .hero-ring-wrap{display:flex;justify-content:center;margin-top:.25rem}
     .hero-ring{position:relative;width:172px;height:172px}
@@ -361,6 +370,17 @@
     <div class="walk-info-distance" id="walk-info-distance">0 m</div>
   </div>
   <button class="btn-recalculate" id="btn-recalculate-route" title="Recalcular ruta"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg></button>
+
+  <div class="modal-backdrop" id="egg-modal">
+    <div class="modal-card">
+      <canvas class="egg-modal-canvas" id="egg-modal-canvas" width="12" height="12"></canvas>
+      <h2>Has trobat un ou misteriós!</h2>
+      <p class="subtitle">T'esperava al final de la caminada. Si en tens cura i continues caminant, eclosionarà.</p>
+      <label class="egg-name-label" for="egg-name-input">Posa-li nom</label>
+      <input type="text" id="egg-name-input" class="egg-name-input" maxlength="14" value="Wisi">
+      <button class="btn" id="btn-adopt-egg">Adoptar-lo</button>
+    </div>
+  </div>
 
   <div id="debug-panel" class="debug-panel" aria-hidden="true">
     <div class="debug-title">Mode Debug</div>
@@ -846,8 +866,16 @@
       routeInfo.textContent=text;
     }
 
+    const ICON_CHECK_CIRCLE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>';
+    const ICON_EGG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.5 2 5 8 5 13a7 7 0 0 0 14 0c0-5-3.5-11-7-11z"/></svg>';
+
     function setWalkButtonsVisibility({start=false,claimOutbound=false,returnOrigin=false,claimReturn=false}={}){
       btnStartWalk.style.display=start?'flex':'none';
+      if(claimOutbound){
+        btnClaimOutbound.innerHTML=getPet()
+          ?`${ICON_CHECK_CIRCLE} Reclamar anada`
+          :`${ICON_EGG} Reclamar l'ou`;
+      }
       btnClaimOutbound.style.display=claimOutbound?'flex':'none';
       btnReturnOrigin.style.display=returnOrigin?'flex':'none';
       btnClaimReturn.style.display=claimReturn?'flex':'none';
@@ -1298,6 +1326,43 @@
       }
     }
 
+    /* ---- Modal d'adopció de l'ou (primer dia) ---- */
+    let eggModalAnimId=null;
+    function showEggModal(){
+      const modal=document.getElementById('egg-modal');
+      if(!modal)return;
+      const pet=getPet();
+      const input=document.getElementById('egg-name-input');
+      if(input&&pet)input.value=pet.name;
+      modal.classList.add('visible');
+      let frame=0;
+      drawPetSprite('egg-modal-canvas',0);
+      if(eggModalAnimId)clearInterval(eggModalAnimId);
+      eggModalAnimId=setInterval(()=>{
+        frame=(frame+1)%2;
+        drawPetSprite('egg-modal-canvas',frame);
+      },600);
+    }
+
+    function closeEggModal(){
+      const modal=document.getElementById('egg-modal');
+      if(modal)modal.classList.remove('visible');
+      if(eggModalAnimId){clearInterval(eggModalAnimId);eggModalAnimId=null;}
+    }
+
+    function adoptEgg(){
+      const pet=getPet();
+      if(!pet)return;
+      const input=document.getElementById('egg-name-input');
+      const name=(input&&input.value.trim())||'Wisi';
+      pet.name=name.slice(0,14);
+      savePet(pet);
+      closeEggModal();
+      updatePetUi();
+      syncDestinationMarkerStyle();
+      setTamaMessage(`Benvingut, ${pet.name}!`,true);
+    }
+
     function getLegData(leg){
       if(!currentRouteMetrics)return null;
       let distKm;
@@ -1395,7 +1460,9 @@
         stopWalkWatcher();
         saveWalkSession();
         setWalkButtonsVisibility({claimOutbound:true});
-        setRouteInfoText('Has arribat al destí! Prem "Reclamar anada".');
+        setRouteInfoText(getPet()
+          ?'Has arribat al destí! Prem "Reclamar anada".'
+          :'Has arribat! Un ou misteriós t\'hi esperava. Reclama\'l!');
       }else if(leg==='return'){
         walkSession.returnElapsedSeconds=elapsedSeconds;
         walkSession.activeLeg=null;
@@ -1809,12 +1876,21 @@
       setRouteInfoText('Geolocalització no disponible');
     }
 
+    /* El pin de destinació es mostra com un ou misteriós fins que l'usuari
+       adopta la mascota */
+    function syncDestinationMarkerStyle(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.setDestinationMarkerStyle){
+        try{WiseWalkAndroid.setDestinationMarkerStyle(getPet()?'flag':'egg');}catch(_){}
+      }
+    }
+
     function sendRouteToNative(coordinates){
       if(!Array.isArray(coordinates)||coordinates.length===0){
         debugLog('sendRouteToNative: coordenades buides o invàlides');
         return;
       }
       debugLog(`sendRouteToNative: enviant ${coordinates.length} punts al mapa natiu`);
+      syncDestinationMarkerStyle();
       if(window.WiseWalkAndroid&&WiseWalkAndroid.drawRoute){
         try{
           WiseWalkAndroid.drawRoute(JSON.stringify(coordinates));
@@ -1985,6 +2061,8 @@
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
+      const isFirstEgg=!getPet();
+      if(isFirstEgg)createPet('Wisi');
       notifyPetWalkCompleted();
       walkSession.outboundClaimed=true;
       saveWalkSession();
@@ -1996,6 +2074,7 @@
 
       setWalkButtonsVisibility({returnOrigin:true});
       setRouteInfoText(`Anada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h. Prem per iniciar la tornada.`);
+      if(isFirstEgg)showEggModal();
     }
 
     function startReturnWalk(){
@@ -2303,6 +2382,7 @@
       const pet=getPet();
       if(pet)setTamaMessage(`Menjar ${pet.hunger}/100 · Felicitat ${pet.happiness}/100 · ${pet.xp||0} XP`);
     });
+    document.getElementById('btn-adopt-egg').addEventListener('click',adoptEgg);
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden)updatePetUi();
     });
