@@ -139,6 +139,17 @@
     .goal-bar{flex:1;height:8px;border-radius:99px;background:var(--accent-light);overflow:hidden}
     .goal-bar-fill{height:100%;width:0;border-radius:99px;background:var(--accent);transition:width .8s ease-out}
     .goal-row-value{font-weight:600;white-space:nowrap}
+    .daily-divider{border-top:1px solid var(--border);margin:1.15rem 0 .95rem}
+    .daily-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;text-align:center}
+    .daily-stat-value{font-weight:700;font-size:1.05rem;color:var(--accent)}
+    .daily-stat-label{font-size:.7rem;color:var(--text-soft);margin-top:.1rem}
+    .water-row{display:flex;align-items:center;gap:.6rem;margin-top:1rem;background:var(--input-bg);border-radius:12px;padding:.5rem .7rem}
+    .water-row>svg{width:16px;height:16px;color:#5b9bd5;flex-shrink:0}
+    .water-bar{flex:1;height:7px;border-radius:99px;background:var(--accent-light);overflow:hidden}
+    .water-bar-fill{height:100%;width:0;border-radius:99px;background:#5b9bd5;transition:width .4s ease-out}
+    .water-count{font-size:.78rem;font-weight:600;white-space:nowrap}
+    .water-add{border:none;background:var(--accent);color:#fff;border-radius:99px;padding:.35rem .75rem;font-size:.8rem;font-weight:700;font-family:'Roboto Flex',sans-serif;cursor:pointer}
+    .water-add:active{transform:scale(.96)}
     .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}
     .stat-tile{background:var(--input-bg);border-radius:14px;padding:.8rem .4rem;text-align:center}
     .stat-value{font-weight:700;font-size:1.05rem;color:var(--accent)}
@@ -268,6 +279,18 @@
         <div class="goal-rows">
           <div class="goal-row"><span class="goal-row-label">Setmana</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-week"></div></div><span class="goal-row-value" id="val-week">0 / 0</span></div>
           <div class="goal-row"><span class="goal-row-label">Mes</span><div class="goal-bar"><div class="goal-bar-fill" id="bar-month"></div></div><span class="goal-row-value" id="val-month">0 / 0</span></div>
+        </div>
+        <div class="daily-divider"></div>
+        <div class="daily-strip">
+          <div><div class="daily-stat-value" id="day-steps">0</div><div class="daily-stat-label">passos</div></div>
+          <div><div class="daily-stat-value" id="day-distance">0,0 km</div><div class="daily-stat-label">recorreguts</div></div>
+          <div><div class="daily-stat-value" id="day-minutes">0 min</div><div class="daily-stat-label">en moviment</div></div>
+        </div>
+        <div class="water-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.7C8.5 7 6 10.3 6 13.8a6 6 0 0 0 12 0c0-3.5-2.5-6.8-6-11.1z"/></svg>
+          <div class="water-bar"><div class="water-bar-fill" id="water-bar-fill"></div></div>
+          <span class="water-count" id="water-count">0 / 8</span>
+          <button class="water-add" id="btn-water-add" type="button">+1 got</button>
         </div>
       </section>
       <section class="card" id="card-pet" style="display:none">
@@ -1048,6 +1071,59 @@
       if(km)km.textContent=`${formatDecimal(totals.totalKm.toFixed(1))} km`;
       if(kcal)kcal.textContent=totals.totalKcal.toLocaleString('ca');
       if(walks)walks.textContent=totals.walks;
+    }
+
+    /* ==== Activitat diària del servei natiu (passos, distància, aigua) ==== */
+    let waterGoalGlasses=8;
+    let currentWaterGlasses=0;
+
+    function renderWaterGlasses(glasses){
+      currentWaterGlasses=glasses;
+      const count=document.getElementById('water-count');
+      const fill=document.getElementById('water-bar-fill');
+      if(count)count.textContent=`${glasses} / ${waterGoalGlasses}`;
+      if(fill)fill.style.width=`${Math.min(100,(glasses/waterGoalGlasses)*100)}%`;
+    }
+
+    function renderDailyStats(stats){
+      if(!stats)return;
+      const steps=document.getElementById('day-steps');
+      const dist=document.getElementById('day-distance');
+      const mins=document.getElementById('day-minutes');
+      if(steps&&typeof stats.steps!=='undefined')steps.textContent=Number(stats.steps).toLocaleString('ca');
+      if(dist&&typeof stats.distanceKm!=='undefined')dist.textContent=`${formatDecimal(Number(stats.distanceKm).toFixed(1))} km`;
+      if(mins&&typeof stats.walkingMin!=='undefined')mins.textContent=`${stats.walkingMin} min`;
+      if(typeof stats.waterGoal!=='undefined'&&stats.waterGoal>0)waterGoalGlasses=stats.waterGoal;
+      if(typeof stats.waterGlasses!=='undefined')renderWaterGlasses(stats.waterGlasses);
+    }
+
+    window.wiseWalkOnStatsUpdate=function(stats){
+      try{renderDailyStats(stats);}catch(_){}
+    };
+
+    window.wiseWalkOnWaterUpdate=function(glasses){
+      renderWaterGlasses(glasses);
+    };
+
+    /* Pinta l'estat persistit i engega el servei de passos en segon pla */
+    function initDailyStats(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.getDailyStats){
+        try{renderDailyStats(JSON.parse(WiseWalkAndroid.getDailyStats()));}catch(_){}
+      }
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.requestPermissions){
+        try{WiseWalkAndroid.requestPermissions();}catch(_){}
+      }
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.startBackgroundTracking){
+        try{WiseWalkAndroid.startBackgroundTracking();}catch(_){}
+      }
+    }
+
+    function addWaterGlassFromUi(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.addWaterGlass){
+        try{WiseWalkAndroid.addWaterGlass();}catch(_){}
+      }else{
+        renderWaterGlasses(currentWaterGlasses+1);
+      }
     }
 
     /* ==== Tamagotchi: estat, inventari i pantalla ==== */
@@ -2503,6 +2579,7 @@
     formSetup.addEventListener('submit',e=>{
       e.preventDefault();
       saveProfileFromForm('setup');
+      initDailyStats();
       showScreen('main');
     });
 
@@ -2561,8 +2638,14 @@
       if(pet)setTamaMessage(`Menjar ${pet.hunger}/100 · Felicitat ${pet.happiness}/100 · ${pet.xp||0} XP`);
     });
     document.getElementById('btn-adopt-egg').addEventListener('click',adoptEgg);
+    document.getElementById('btn-water-add').addEventListener('click',addWaterGlassFromUi);
     document.addEventListener('visibilitychange',()=>{
-      if(!document.hidden)updatePetUi();
+      if(!document.hidden){
+        updatePetUi();
+        if(window.WiseWalkAndroid&&WiseWalkAndroid.getDailyStats){
+          try{renderDailyStats(JSON.parse(WiseWalkAndroid.getDailyStats()));}catch(_){}
+        }
+      }
     });
 
     /* ---- Lògica del Selector de Mapa (Pin Arrossegable) ---- */
@@ -2641,6 +2724,7 @@
     if(loadProfile()){
       updateCalorieGoals();
       updateActivityTotals();
+      initDailyStats();
       showScreen('main');
       restoreWalkUi();
     }else{

@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
+    private var statsReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
     private var isCompassEnabled: Boolean = false
     private var pendingLocationRequest: Boolean = false
@@ -222,6 +223,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             registerReceiver(locationReceiver, locationFilter)
         }
 
+        statsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != StepTrackingService.ACTION_STATS_UPDATE) return
+                val statsJson = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON)
+                if (statsJson != null) {
+                    sendStatsToWeb(statsJson)
+                } else if (intent.getBooleanExtra("water_update", false)) {
+                    sendWaterToWeb(intent.getIntExtra("water_glasses", 0))
+                }
+            }
+        }
+        val statsFilter = IntentFilter(StepTrackingService.ACTION_STATS_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statsReceiver, statsFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(statsReceiver, statsFilter)
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (wv.canGoBack()) wv.goBack() else finish()
@@ -275,6 +294,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
         locationReceiver = null
+        statsReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w("WiseWalk", "Stats receiver was already unregistered", e)
+            }
+        }
+        statsReceiver = null
         removeOneShotLocationCallback()
         pendingGeolocationCallback = null
         pendingGeolocationOrigin = null
@@ -634,6 +661,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun sendLocationToWeb(lat: Double, lng: Double) {
         val js = "window.wiseWalkSetLocation && window.wiseWalkSetLocation($lat, $lng);"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
+    private fun sendStatsToWeb(statsJson: String) {
+        val js = "window.wiseWalkOnStatsUpdate && window.wiseWalkOnStatsUpdate($statsJson);"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
+    private fun sendWaterToWeb(glasses: Int) {
+        val js = "window.wiseWalkOnWaterUpdate && window.wiseWalkOnWaterUpdate($glasses);"
         binding.webView.post {
             binding.webView.evaluateJavascript(js, null)
         }
@@ -1050,6 +1091,53 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.routePolyline?.stopAnimation()
                     activity.snappedLocationOverlay?.stopAnimation()
                     activity.collectibleOverlay?.stopAnimation()
+                }
+            }
+        }
+
+        /** Daily stats snapshot from prefs, for the initial paint before the
+         * step service broadcasts its first ACTION_STATS_UPDATE. */
+        @JavascriptInterface
+        fun getDailyStats(): String {
+            return try {
+                val prefs = activity.prefs
+                val today = java.time.LocalDate.now().toString()
+                val sameDay = prefs.getString("today_key", null) == today
+                val baseline = if (sameDay && prefs.contains("baseline_steps_total")) prefs.getLong("baseline_steps_total", 0L) else null
+                val last = if (sameDay && prefs.contains("last_total_steps")) prefs.getLong("last_total_steps", 0L) else null
+                val steps = if (baseline != null && last != null) (last - baseline).coerceAtLeast(0L) else 0L
+                val heightCm = prefs.getInt("profile_height_cm", 170).toDouble()
+                val strideMeters = heightCm / 100.0 * when ((prefs.getString("profile_sex", "M") ?: "M").uppercase()) {
+                    "M" -> 0.415
+                    "F" -> 0.413
+                    else -> 0.414
+                }
+                val walkingMin = if (sameDay) (prefs.getLong("walking_time_ms", 0L) / 60000L).toInt() else 0
+                JSONObject().apply {
+                    put("steps", steps)
+                    put("distanceKm", Math.round(steps * strideMeters / 100.0) / 10.0)
+                    put("walkingMin", walkingMin)
+                    put("waterGlasses", prefs.getInt("water_glasses_$today", 0))
+                    put("waterGoal", prefs.getInt("water_goal_glasses", 8))
+                }.toString()
+            } catch (e: Throwable) {
+                Log.w("WiseWalk", "getDailyStats: error llegint estadístiques", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun addWaterGlass() {
+            activity.runOnUiThread {
+                if (StepTrackingService.isRunning) {
+                    activity.sendBroadcast(Intent(StepTrackingService.ACTION_WATER_DRINK).apply {
+                        setPackage(activity.packageName)
+                    })
+                } else {
+                    val today = java.time.LocalDate.now().toString()
+                    val newVal = activity.prefs.getInt("water_glasses_$today", 0) + 1
+                    activity.prefs.edit().putInt("water_glasses_$today", newVal).apply()
+                    activity.sendWaterToWeb(newVal)
                 }
             }
         }
