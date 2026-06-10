@@ -170,21 +170,21 @@ class PulsingMarkerOverlay(
 
     /** Mystery egg: white oval with accent spots resting on the ground point. */
     private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, accent: Int, dropOffset: Float) {
-        val eggWidth = 19f * density
-        val eggHeight = 24f * density
+        val eggWidth = 57f * density
+        val eggHeight = 72f * density
         val bottom = y - dropOffset
         val top = bottom - eggHeight
         val rect = RectF(x - eggWidth / 2f, top, x + eggWidth / 2f, bottom)
 
         canvas.drawOval(rect, corePaint)
         ringPaint.color = accent
-        ringPaint.strokeWidth = 2.5f * density
+        ringPaint.strokeWidth = 4.5f * density
         canvas.drawOval(rect, ringPaint)
         ringPaint.color = Color.WHITE
 
         pinPaint.color = accent
-        canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 2.4f * density, pinPaint)
-        canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 1.9f * density, pinPaint)
-        canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 1.5f * density, pinPaint)
+        canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 7.2f * density, pinPaint)
+        canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 5.7f * density, pinPaint)
+        canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 4.5f * density, pinPaint)
     }
 }

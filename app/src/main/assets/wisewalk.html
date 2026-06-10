@@ -67,6 +67,13 @@
     .route-detail{text-align:center;background:var(--accent-light);border-radius:12px;padding:.6rem .4rem}
     .route-detail-value{font-weight:700;color:var(--accent);font-size:1.05rem}.route-detail-label{font-size:.7rem;color:var(--text-soft)}
     .route-options{display:none;grid-template-columns:1fr;gap:.5rem;margin:.75rem 0}
+    .distance-row{display:flex;align-items:center;gap:.75rem;margin:.5rem 0 .25rem}
+    .distance-label{font-size:.8rem;font-weight:600;color:var(--text-soft);flex-shrink:0}
+    .distance-chips{display:flex;gap:.5rem;flex:1}
+    .distance-chip{flex:1;padding:.5rem .25rem;background:var(--bg-card);border:2px solid var(--border);border-radius:99px;font-size:.85rem;font-weight:600;font-family:'Roboto Flex',sans-serif;color:var(--text-soft);cursor:pointer;transition:all .2s}
+    .distance-chip.active{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+    .distance-chip:active{transform:scale(.97)}
+    body.map-mode .distance-row{display:none!important}
     .route-option{display:flex;align-items:center;gap:.75rem;width:100%;padding:.7rem .85rem;background:var(--bg-card);border:2px solid var(--border);border-radius:14px;cursor:pointer;font-family:'Roboto Flex',sans-serif;color:var(--text);text-align:left;transition:all .2s}
     .route-option:active{transform:scale(.99)}
     .route-option.active{border-color:var(--accent);background:var(--accent-light)}
@@ -325,6 +332,14 @@
         <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 destinacions en direccions diferents</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Genera una ruta sorpresa i surt a caminar.</div>
+          <div class="distance-row" id="distance-row">
+            <span class="distance-label">Anada</span>
+            <div class="distance-chips" id="distance-chips">
+              <button type="button" class="distance-chip" data-km="1">1 km</button>
+              <button type="button" class="distance-chip" data-km="1.5">1,5 km</button>
+              <button type="button" class="distance-chip" data-km="2">2 km</button>
+            </div>
+          </div>
           <div class="route-options" id="route-options" style="display:none"></div>
           <div class="route-details" id="route-details" style="display:none">
             <div class="route-detail"><div class="route-detail-value" id="route-distance">— km</div><div class="route-detail-label">distància</div></div>
@@ -1928,6 +1943,15 @@
 
     const ROUTE_OPTION_COUNT=3;
 
+    /* Distància d'anada seleccionable (la tornada aproximadament la duplica) */
+    let selectedOutboundKm=parseFloat(localStorage.getItem('wisewalk-outbound-km'))||1.5;
+    function getTargetOutboundM(){return selectedOutboundKm*1000;}
+    function renderDistanceChips(){
+      document.querySelectorAll('.distance-chip').forEach(chip=>{
+        chip.classList.toggle('active',parseFloat(chip.dataset.km)===selectedOutboundKm);
+      });
+    }
+
     /* Fetches one walkable route towards a fixed bearing and returns it as a
        candidate with its real on-foot distance */
     async function fetchCandidateRoute(start,bearing,radiusM){
@@ -1951,7 +1975,7 @@
        jitter), fetched in parallel. Candidates too far from the target
        distance get a single corrective retry, also in parallel. */
     async function generateRouteOptions(start){
-      const targetM=TARGET_OUTBOUND_DISTANCE_M;
+      const targetM=getTargetOutboundM();
       const radius=targetM/URBAN_TORTUOSITY_FACTOR;
       const sector=(2*Math.PI)/ROUTE_OPTION_COUNT;
       const base=Math.random()*2*Math.PI;
@@ -1999,7 +2023,7 @@
     /* Single best route towards any direction (used by the mid-walk
        recalculation): three parallel candidates, keep the closest match */
     async function generateRouteFromLocation(start,overrideOutboundM){
-      const targetM=overrideOutboundM||TARGET_OUTBOUND_DISTANCE_M;
+      const targetM=overrideOutboundM||getTargetOutboundM();
       const radius=Math.max(120,targetM/URBAN_TORTUOSITY_FACTOR);
       const base=Math.random()*2*Math.PI;
       const sector=(2*Math.PI)/3;
@@ -2639,6 +2663,14 @@
     });
     document.getElementById('btn-adopt-egg').addEventListener('click',adoptEgg);
     document.getElementById('btn-water-add').addEventListener('click',addWaterGlassFromUi);
+    document.getElementById('distance-chips').addEventListener('click',e=>{
+      const chip=e.target.closest('.distance-chip');
+      if(!chip)return;
+      selectedOutboundKm=parseFloat(chip.dataset.km);
+      localStorage.setItem('wisewalk-outbound-km',selectedOutboundKm);
+      renderDistanceChips();
+    });
+    renderDistanceChips();
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden){
         updatePetUi();
