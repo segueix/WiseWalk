@@ -1055,6 +1055,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         @JavascriptInterface
+        fun updatePetState(petJson: String) {
+            try {
+                val o = JSONObject(petJson)
+                activity.prefs.edit()
+                    .putBoolean("pet_exists", o.optBoolean("exists", false))
+                    .putString("pet_name", o.optString("name", ""))
+                    .putInt("pet_hunger", o.optInt("hunger", 100))
+                    .putLong("pet_synced_at", System.currentTimeMillis())
+                    .apply()
+            } catch (e: Throwable) {
+                Log.w("WiseWalk", "updatePetState: error desant estat de la mascota", e)
+            }
+        }
+
+        @JavascriptInterface
         fun drawCollectibles(itemsJson: String) {
             activity.runOnUiThread {
                 try {

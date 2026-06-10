@@ -62,9 +62,11 @@ class StepTrackingService : Service(), SensorEventListener {
         const val CHANNEL_ID_SERVICE = "wisewalk_tracking"
         const val CHANNEL_ID_GOAL = "wisewalk_goal"
         const val CHANNEL_ID_WATER = "wisewalk_water"
+        const val CHANNEL_ID_PET = "wisewalk_pet"
         const val NOTIF_ID_SERVICE = 1
         const val NOTIF_ID_GOAL = 1001
         const val NOTIF_ID_WATER = 2001
+        const val NOTIF_ID_PET = 3001
         
         const val ACTION_STATS_UPDATE = "com.wisewalk.app.STATS_UPDATE"
         const val ACTION_WATER_REMINDER = "com.wisewalk.app.WATER_REMINDER"
@@ -115,7 +117,46 @@ class StepTrackingService : Service(), SensorEventListener {
                 scheduleWaterReminders()
             }
         }
+        maybeNotifyPetHungry()
         return START_STICKY
+    }
+
+    /**
+     * Daily reminder when the Tamagotchi pet is hungry. The web layer syncs
+     * the pet state to prefs (updatePetState bridge); here we project the
+     * hunger decay since that sync and notify at most once per day.
+     */
+    private fun maybeNotifyPetHungry() {
+        if (!prefs.getBoolean("pet_exists", false)) return
+        if (wasNotifiedToday("pet")) return
+
+        val syncedAt = prefs.getLong("pet_synced_at", 0L)
+        if (syncedAt <= 0L) return
+        val daysSinceSync = ((System.currentTimeMillis() - syncedAt) / 86400000.0).coerceAtMost(3.0)
+        val projectedHunger = prefs.getInt("pet_hunger", 100) - (daysSinceSync * 15).toInt()
+        if (projectedHunger >= 30) return
+
+        val petName = prefs.getString("pet_name", null)?.takeIf { it.isNotBlank() } ?: "La teva mascota"
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            this, 2, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID_PET)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("🐾 $petName té gana!")
+            .setContentText("Surt a fer una caminada i porta-li alguna cosa per menjar.")
+            .setAutoCancel(true)
+            .setContentIntent(openPendingIntent)
+            .build()
+
+        nm.notify(NOTIF_ID_PET, notif)
+        setNotifiedToday("pet")
     }
 
     private fun startTrackingForeground() {
@@ -301,6 +342,15 @@ class StepTrackingService : Service(), SensorEventListener {
                 description = "Recordatoris per beure aigua"
             }
             nm.createNotificationChannel(waterChannel)
+
+            val petChannel = NotificationChannel(
+                CHANNEL_ID_PET,
+                "La teva mascota",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Avisos quan la mascota necessita atenció"
+            }
+            nm.createNotificationChannel(petChannel)
         }
     }
 
@@ -553,6 +603,7 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
         resetIfNewDay()
+        maybeNotifyPetHungry()
 
         val total = event.values[0].toLong()
         val baseline = baselineTotalOrNull()
