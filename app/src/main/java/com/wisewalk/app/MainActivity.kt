@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
     private var destinationMarkerStyle: String = "flag"
+    private var collectibleOverlay: CollectibleOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var copyrightOverlay: CopyrightOverlay? = null
     private var lastBearing: Float = 0f
@@ -241,6 +242,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         destinationMarker?.startAnimation(mapView)
         routePolyline?.startAnimation(mapView)
         snappedLocationOverlay?.startAnimation(mapView)
+        collectibleOverlay?.let { if (it.hasItems()) it.startAnimation(mapView) }
         if (isWalkGpsModeActive && isCompassEnabled) {
             rotationSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
@@ -255,6 +257,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         destinationMarker?.stopAnimation()
         routePolyline?.stopAnimation()
         snappedLocationOverlay?.stopAnimation()
+        collectibleOverlay?.stopAnimation()
         sensorManager.unregisterListener(this)
     }
 
@@ -435,6 +438,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             destinationMarker?.stopAnimation()
             routePolyline?.stopAnimation()
             snappedLocationOverlay?.stopAnimation()
+            collectibleOverlay?.stopAnimation()
         }
     }
 
@@ -680,6 +684,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         routePolyline = arrowOverlay
                         mapView.overlays.add(arrowOverlay)
                         arrowOverlay.startAnimation(mapView)
+
+                        // Collectible items render above the route, below markers
+                        collectibleOverlay?.let {
+                            mapView.overlays.add(it)
+                            if (it.hasItems()) it.startAnimation(mapView)
+                        }
 
                         // Add pulsing destination marker at last point
                         destinationMarker?.stopAnimation()
@@ -1039,7 +1049,44 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.destinationMarker?.stopAnimation()
                     activity.routePolyline?.stopAnimation()
                     activity.snappedLocationOverlay?.stopAnimation()
+                    activity.collectibleOverlay?.stopAnimation()
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun drawCollectibles(itemsJson: String) {
+            activity.runOnUiThread {
+                try {
+                    val arr = JSONArray(itemsJson)
+                    val items = mutableListOf<CollectibleOverlay.Item>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val lat = o.optDouble("lat", Double.NaN)
+                        val lng = o.optDouble("lng", Double.NaN)
+                        if (lat.isNaN() || lng.isNaN()) continue
+                        items.add(CollectibleOverlay.Item(o.optString("id"), GeoPoint(lat, lng), o.optString("type", "apple")))
+                    }
+                    val overlay = activity.collectibleOverlay ?: CollectibleOverlay().also {
+                        activity.collectibleOverlay = it
+                    }
+                    if (!activity.mapView.overlays.contains(overlay)) {
+                        val markerIdx = activity.mapView.overlays.indexOf(activity.destinationMarker)
+                        if (markerIdx >= 0) activity.mapView.overlays.add(markerIdx, overlay)
+                        else activity.mapView.overlays.add(overlay)
+                    }
+                    overlay.setItems(items, activity.mapView)
+                    activity.mapView.invalidate()
+                } catch (e: Throwable) {
+                    Log.e("WiseWalk", "drawCollectibles: error processant elements", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun removeCollectible(id: String) {
+            activity.runOnUiThread {
+                activity.collectibleOverlay?.removeItem(id, activity.mapView)
             }
         }
 

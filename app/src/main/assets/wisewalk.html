@@ -114,6 +114,8 @@
     .egg-name-label{display:block;font-size:.8rem;color:var(--text-soft);margin-top:1.1rem;margin-bottom:.4rem}
     .egg-name-input{width:100%;padding:.85rem 1rem;border:2px solid var(--border);border-radius:14px;font-size:1rem;text-align:center;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text)}
     .egg-name-input:focus{outline:none;border-color:var(--accent)}
+    .pickup-banner{position:fixed;top:104px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--accent);color:#fff;padding:.55rem 1.15rem;border-radius:99px;font-size:.85rem;font-weight:600;z-index:1003;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;box-shadow:0 6px 18px rgba(0,0,0,.28);max-width:85vw;text-align:center}
+    .pickup-banner.visible{opacity:1;transform:translateX(-50%) translateY(0)}
 
     .hero-ring-wrap{display:flex;justify-content:center;margin-top:.25rem}
     .hero-ring{position:relative;width:172px;height:172px}
@@ -370,6 +372,7 @@
     <div class="walk-info-distance" id="walk-info-distance">0 m</div>
   </div>
   <button class="btn-recalculate" id="btn-recalculate-route" title="Recalcular ruta"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg></button>
+  <div class="pickup-banner" id="pickup-banner"></div>
 
   <div class="modal-backdrop" id="egg-modal">
     <div class="modal-card">
@@ -897,6 +900,8 @@
       stopWalkTimer();
       stopWalkWatcher();
       walkSession=null;
+      routeCollectibles=[];
+      sendCollectiblesToNative([]);
       saveWalkSession();
       setMapMode(false);
       showWalkInfoBox(false);
@@ -1031,10 +1036,10 @@
 
     /* ==== Tamagotchi: estat, inventari i pantalla ==== */
     const PET_ITEMS={
-      apple:{name:'Poma',hunger:20,happiness:0,xp:0,weight:45},
-      cookie:{name:'Galeta',hunger:10,happiness:5,xp:0,weight:25},
-      ball:{name:'Pilota',hunger:0,happiness:15,xp:0,weight:20},
-      star:{name:'Estrella',hunger:0,happiness:0,xp:10,weight:10}
+      apple:{name:'Poma',found:'una poma',hunger:20,happiness:0,xp:0,weight:45},
+      cookie:{name:'Galeta',found:'una galeta',hunger:10,happiness:5,xp:0,weight:25},
+      ball:{name:'Pilota',found:'una pilota',hunger:0,happiness:15,xp:0,weight:20},
+      star:{name:'Estrella',found:'una estrella',hunger:0,happiness:0,xp:10,weight:10}
     };
     const PET_ITEM_ICONS={
       apple:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8c-4 0-6 3-6 6 0 4 3 7 6 7s6-3 6-7c0-3-2-6-6-6z"/><path d="M12 8c0-3 1-4 3-5"/></svg>',
@@ -1235,7 +1240,8 @@
       updatePetUi();
     }
 
-    /* Cridat quan es reclama una anada o tornada: XP i retorn d'excursió */
+    /* Cridat quan es reclama una anada o tornada: XP, element de regal
+       garantit i retorn d'excursió */
     function notifyPetWalkCompleted(){
       const pet=getPet();
       if(!pet)return;
@@ -1248,6 +1254,9 @@
         setTamaMessage(`${pet.name} ha tornat de l'excursió amb tu!`);
       }
       addPetXp(10);
+      const bonusType=pickWeightedItemType();
+      addItem(bonusType,1);
+      showPickupBanner(`Recompensa: ${PET_ITEMS[bonusType].found} per a ${pet.name}!`);
       updatePetUi();
     }
 
@@ -1323,6 +1332,92 @@
       if(getPet()){
         drawPetSprite('pet-mini-canvas',0);
         drawPetSprite('tama-canvas',tamaFrame);
+      }
+    }
+
+    /* ---- Col·leccionables a les rutes ---- */
+    const COLLECTIBLE_CLAIM_RADIUS_M=30;
+    let routeCollectibles=[];
+
+    function pickWeightedItemType(){
+      const entries=Object.entries(PET_ITEMS);
+      const total=entries.reduce((sum,[,def])=>sum+def.weight,0);
+      let r=Math.random()*total;
+      for(const[type,def]of entries){
+        r-=def.weight;
+        if(r<=0)return type;
+      }
+      return 'apple';
+    }
+
+    /* 1-2 elements sobre punts reals de la polyline, entre el 25% i el 85%
+       del recorregut. Sense mascota no n'apareixen: el primer dia el
+       protagonista és l'ou. */
+    function spawnRouteCollectibles(coords){
+      if(!getPet()||!coords||coords.length<4)return[];
+      const count=1+Math.floor(Math.random()*2);
+      const items=[];
+      const usedIdx=new Set();
+      for(let i=0;i<count;i++){
+        const t=0.25+Math.random()*0.6;
+        let idx=Math.round(t*(coords.length-1));
+        while(usedIdx.has(idx)&&idx<coords.length-1)idx++;
+        if(usedIdx.has(idx))continue;
+        usedIdx.add(idx);
+        items.push({
+          id:`c${Date.now()}_${i}`,
+          lat:coords[idx][1],
+          lng:coords[idx][0],
+          type:pickWeightedItemType()
+        });
+      }
+      return items;
+    }
+
+    function sendCollectiblesToNative(items){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.drawCollectibles){
+        try{WiseWalkAndroid.drawCollectibles(JSON.stringify(items||[]));}catch(_){}
+      }
+    }
+
+    function removeCollectibleFromMap(id){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.removeCollectible){
+        try{WiseWalkAndroid.removeCollectible(id);}catch(_){}
+      }
+    }
+
+    let pickupBannerTimer=null;
+    function showPickupBanner(text){
+      const banner=document.getElementById('pickup-banner');
+      if(!banner)return;
+      banner.textContent=text;
+      banner.classList.add('visible');
+      if(pickupBannerTimer)clearTimeout(pickupBannerTimer);
+      pickupBannerTimer=setTimeout(()=>{
+        banner.classList.remove('visible');
+        pickupBannerTimer=null;
+      },2600);
+    }
+
+    /* Recollida automàtica en passar a prop d'un element durant la caminada */
+    function checkCollectiblePickup(lat,lng){
+      if(!walkSession||!walkSession.collectibles||!walkSession.collectibles.length)return;
+      const remaining=[];
+      walkSession.collectibles.forEach(item=>{
+        if(haversineDistance(lat,lng,item.lat,item.lng)<=COLLECTIBLE_CLAIM_RADIUS_M){
+          const def=PET_ITEMS[item.type]||PET_ITEMS.apple;
+          addItem(item.type,1);
+          addPetXp(5);
+          removeCollectibleFromMap(item.id);
+          showPickupBanner(`Has trobat ${def.found}! +5 XP`);
+        }else{
+          remaining.push(item);
+        }
+      });
+      if(remaining.length!==walkSession.collectibles.length){
+        walkSession.collectibles=remaining;
+        saveWalkSession();
+        updatePetUi();
       }
     }
 
@@ -1513,6 +1608,7 @@
       }else if(walkSession.activeLeg==='return'&&returnCoordinates&&returnCoordinates.length>=2){
         sendRouteToNative(returnCoordinates);
       }
+      sendCollectiblesToNative(walkSession.collectibles||[]);
       if(walkSession.activeLeg==='outbound'){
         setWalkButtonsVisibility({});
         showWalkInfoBox(true);
@@ -1784,6 +1880,7 @@
       userLocation={lat,lng};
       clearLocationTimeout();
       if(walkSession&&walkSession.activeLeg){
+        checkCollectiblePickup(lat,lng);
         const coords=walkSession.activeLeg==='outbound'?outboundCoordinates:returnCoordinates;
         const target=walkSession.activeLeg==='outbound'?walkSession.destination:walkSession.origin;
 
@@ -1964,6 +2061,8 @@
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
         sendRouteToNative(outboundCoordinates);
+        routeCollectibles=spawnRouteCollectibles(outboundCoordinates);
+        sendCollectiblesToNative(routeCollectibles);
 
         walkSession=null;
         saveWalkSession();
@@ -2043,7 +2142,8 @@
         returnElapsedSeconds:null,
         outboundClaimed:false,
         returnClaimed:false,
-        initialMeters:Math.round(initialM)
+        initialMeters:Math.round(initialM),
+        collectibles:routeCollectibles
       };
       setMapMode(true);
       saveWalkSession();
@@ -2070,6 +2170,10 @@
       if(returnCoordinates&&returnCoordinates.length>=2){
         sendRouteToNative(returnCoordinates);
       }
+      /* Nous elements per al camí de tornada */
+      walkSession.collectibles=spawnRouteCollectibles(returnCoordinates);
+      saveWalkSession();
+      sendCollectiblesToNative(walkSession.collectibles);
       saveRouteCoordinates();
 
       setWalkButtonsVisibility({returnOrigin:true});
@@ -2109,6 +2213,8 @@
       saveWalkSession();
       setRouteInfoText(`Tornada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h.`);
       walkSession=null;
+      routeCollectibles=[];
+      sendCollectiblesToNative([]);
       setMapMode(false);
       showWalkInfoBox(false);
       saveWalkSession();
@@ -2154,7 +2260,10 @@
       setMapMode(false);
       saveWalkSession();
       localStorage.setItem('wisewalk-last-origin',JSON.stringify(simulatedOrigin));
-      sendRouteToNative(buildSimulatedRouteCoordinates(simulatedOrigin,simulatedDestination));
+      const simCoords=buildSimulatedRouteCoordinates(simulatedOrigin,simulatedDestination);
+      sendRouteToNative(simCoords);
+      routeCollectibles=spawnRouteCollectibles(simCoords);
+      sendCollectiblesToNative(routeCollectibles);
 
       document.getElementById('route-distance').textContent=`${formatDecimal(totalDistanceKm.toFixed(1))} km`;
       document.getElementById('route-elevation').textContent=`+${Math.round(totalPositiveGainM)} m`;
