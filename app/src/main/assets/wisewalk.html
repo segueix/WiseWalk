@@ -97,6 +97,8 @@
     .pet-status-bar{flex:1;height:5px;border-radius:99px;background:var(--accent-light);overflow:hidden}
     .pet-status-bar-fill{display:block;height:100%;width:0;border-radius:99px;background:var(--accent);transition:width .6s ease-out}
     .pet-status-bar-fill.warm{background:var(--accent-warm)}
+    .goal-bar-fill.debt,.pet-status-bar-fill.debt,.pet-status-bar-fill.warm.debt{background:#d9534f}
+    .stat-debt{color:#d9534f!important;font-weight:700}
     .pet-status-chevron{margin-left:auto;color:var(--text-soft);flex-shrink:0}
     .confetti-box{position:fixed;inset:0;pointer-events:none;z-index:1200;overflow:hidden}
     .confetti-piece{position:absolute;top:-14px;width:8px;height:12px;border-radius:2px;animation:confettiFall linear forwards}
@@ -1014,8 +1016,12 @@
     const PET_STAGE_NAMES={egg:'Ou',baby:'Cria',child:'Jove',adult:'Adult'};
     const PET_HUNGER_DECAY_PER_DAY=15;
     const PET_HAPPY_DECAY_PER_DAY=10;
-    const PET_MAX_DECAY_DAYS=3;
+    /* Si es deixa de caminar, els indicadors poden baixar fins a números
+       vermells (negatius): es recuperen caminant i gastant més elements */
+    const PET_MIN_STAT=-50;
+    const PET_MAX_DECAY_DAYS=7;
     const PET_AWAY_AFTER_MS=2*86400000;
+    const PET_WALK_RECOVERY=8;
 
     const PET_SPRITES={
       egg:[
@@ -1071,10 +1077,10 @@
       const now=Date.now();
       const elapsedDays=Math.min(PET_MAX_DECAY_DAYS,(now-(pet.lastTickAt||now))/86400000);
       if(elapsedDays>0.01){
-        pet.hunger=Math.max(0,Math.round(pet.hunger-elapsedDays*PET_HUNGER_DECAY_PER_DAY));
-        pet.happiness=Math.max(0,Math.round(pet.happiness-elapsedDays*PET_HAPPY_DECAY_PER_DAY));
+        pet.hunger=Math.max(PET_MIN_STAT,Math.round(pet.hunger-elapsedDays*PET_HUNGER_DECAY_PER_DAY));
+        pet.happiness=Math.max(PET_MIN_STAT,Math.round(pet.happiness-elapsedDays*PET_HAPPY_DECAY_PER_DAY));
         pet.lastTickAt=now;
-        if(pet.hunger===0){
+        if(pet.hunger<=PET_MIN_STAT){
           if(!pet.hungerZeroSince)pet.hungerZeroSince=now;
           else if(now-pet.hungerZeroSince>PET_AWAY_AFTER_MS)pet.away=true;
         }else{
@@ -1107,6 +1113,7 @@
       if(pet.away)return `${pet.name} se n'ha anat d'excursió. Completa una caminada perquè torni!`;
       const stage=getPetStage(pet);
       if(stage==='egg')return 'L\'ou s\'està incubant. Camina per fer-lo eclosionar!';
+      if(pet.hunger<0||pet.happiness<0)return `${pet.name} està en números vermells! Camina més i recull elements per recuperar-lo.`;
       if(pet.hunger<30)return `${pet.name} té gana. Surt a caminar per trobar menjar!`;
       if(pet.happiness<30)return `${pet.name} s'avorreix. Una caminada l'animarà!`;
       return `${pet.name} està content de veure't!`;
@@ -1252,6 +1259,11 @@
         pet.happiness=Math.max(pet.happiness,50);
         savePet(pet);
         setTamaMessage(`${pet.name} ha tornat de l'excursió amb tu!`);
+      }else{
+        /* Caminar recupera directament part dels números vermells */
+        pet.hunger=Math.min(100,pet.hunger+PET_WALK_RECOVERY);
+        pet.happiness=Math.min(100,pet.happiness+PET_WALK_RECOVERY);
+        savePet(pet);
       }
       addPetXp(10);
       const bonusType=pickWeightedItemType();
@@ -1312,10 +1324,15 @@
       const msgEl=document.getElementById('pet-status-msg');
       if(nameEl)nameEl.textContent=pet.name;
       if(msgEl)msgEl.textContent=petStatusMessage(pet);
-      const cardHunger=document.getElementById('pet-card-hunger');
-      const cardHappy=document.getElementById('pet-card-happy');
-      if(cardHunger)cardHunger.style.width=`${pet.hunger}%`;
-      if(cardHappy)cardHappy.style.width=`${pet.happiness}%`;
+      /* En números vermells la barra es pinta vermella i mostra la mida del
+         deute (fins a -50 → barra plena) */
+      const setStatFill=(el,value)=>{
+        if(!el)return;
+        el.classList.toggle('debt',value<0);
+        el.style.width=`${value<0?Math.min(100,Math.abs(value)*2):Math.max(0,Math.min(100,value))}%`;
+      };
+      setStatFill(document.getElementById('pet-card-hunger'),pet.hunger);
+      setStatFill(document.getElementById('pet-card-happy'),pet.happiness);
       drawPetSprite('pet-mini-canvas',0);
 
       const stage=getPetStage(pet);
@@ -1327,8 +1344,14 @@
       const setBar=(barId,valId,value,max,valText)=>{
         const bar=document.getElementById(barId);
         const val=document.getElementById(valId);
-        if(bar)bar.style.width=`${max>0?Math.min(100,(value/max)*100):100}%`;
-        if(val)val.textContent=valText;
+        if(bar){
+          bar.classList.toggle('debt',value<0);
+          bar.style.width=`${value<0?Math.min(100,Math.abs(value)*2):(max>0?Math.min(100,(value/max)*100):100)}%`;
+        }
+        if(val){
+          val.textContent=valText;
+          val.classList.toggle('stat-debt',value<0);
+        }
       };
       setBar('bar-hunger','val-hunger',pet.hunger,100,`${pet.hunger}/100`);
       setBar('bar-happy','val-happy',pet.happiness,100,`${pet.happiness}/100`);
@@ -1376,17 +1399,24 @@
       return Math.atan2(y,x);
     }
 
-    /* 1-2 elements entre el 25% i el 85% del recorregut, desplaçats 10-18 m
-       perpendicularment perquè quedin al costat del camí (dins del radi de
-       30 m per reclamar-los). Sense mascota no n'apareixen: el primer dia el
-       protagonista és l'ou. */
+    /* Elements repartits pel recorregut, desplaçats 10-18 m perpendicularment
+       perquè quedin al costat del camí (dins del radi de 30 m per
+       reclamar-los). La quantitat és proporcional a la distància del tram
+       (~1 element per 700 m): les rutes més llargues donen més recursos, útil
+       per recuperar la mascota dels números vermells. Sense mascota no
+       n'apareixen: el primer dia el protagonista és l'ou. */
+    const COLLECTIBLE_SPACING_M=700;
+
     function spawnRouteCollectibles(coords){
       if(!getPet()||!coords||coords.length<4)return[];
-      const count=1+Math.floor(Math.random()*2);
+      const legM=calculatePolylineDistance(coords);
+      const count=Math.max(1,Math.round(legM/COLLECTIBLE_SPACING_M));
       const items=[];
       const usedIdx=new Set();
+      const span=0.65/count;
       for(let i=0;i<count;i++){
-        const t=0.25+Math.random()*0.6;
+        /* Franja pròpia per a cada element perquè no s'amunteguin */
+        const t=0.22+span*i+Math.random()*span;
         let idx=Math.round(t*(coords.length-1));
         while(usedIdx.has(idx)&&idx<coords.length-1)idx++;
         if(usedIdx.has(idx))continue;
@@ -1718,14 +1748,18 @@
       return `&radiuses=${radii.join(';')}`;
     }
 
-    async function fetchRouteWithOsrm(start,end){
+    /* Ruta OSRM per una llista de punts {lat,lng}. continue_straight impedeix
+       girs de 180° als punts intermedis, així la ruta no entra en un tros de
+       carrer per tornar enrere */
+    async function fetchOsrmRoute(points){
       let lastError=null;
+      const coordsStr=points.map(p=>`${p.lng},${p.lat}`).join(';');
       for(const baseUrl of orderedOsrmEndpoints()){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,end])}`;
+        const url=`${baseUrl}/${coordsStr}?overview=full&geometries=geojson&continue_straight=true${buildOsrmRadiuses(points)}`;
         try{
-          debugLog(`Iniciant fetch a OSRM... ${baseUrl}`);
+          debugLog(`Iniciant fetch a OSRM (${points.length} punts)... ${baseUrl}`);
           const response=await fetch(url,{signal:controller.signal});
           debugLog(`Resposta rebuda (${response.status}) de ${baseUrl}`);
           if(!response.ok){
@@ -1738,7 +1772,7 @@
           }
           throw new Error('Resposta de rutes buida');
         }catch(err){
-          debugLog('Error a fetchRouteWithOsrm');
+          debugLog('Error a fetchOsrmRoute');
           debugLog((err&&err.stack)||err);
           lastError=err;
         }finally{
@@ -1748,6 +1782,31 @@
       throw new Error(lastError&&lastError.name==='AbortError'
         ?'Temps d\'espera excedit connectant amb OpenStreetMap. Torna-ho a provar.'
         :'No s\'ha pogut calcular la ruta amb els serveis d\'OpenStreetMap.');
+    }
+
+    function fetchRouteWithOsrm(start,end){
+      return fetchOsrmRoute([start,end]);
+    }
+
+    /* Metres de la polyline que passen per un segment ja recorregut (en
+       qualsevol sentit): detecta trams d'anada i tornada pel mateix carrer */
+    function computeBacktrackMeters(coords){
+      const seen=new Set();
+      let backtrack=0;
+      for(let i=1;i<coords.length;i++){
+        const a=`${coords[i-1][0]},${coords[i-1][1]}`;
+        const b=`${coords[i][0]},${coords[i][1]}`;
+        if(a===b)continue;
+        if(seen.has(`${a}|${b}`)||seen.has(`${b}|${a}`)){
+          backtrack+=haversineDistance(coords[i-1][1],coords[i-1][0],coords[i][1],coords[i][0]);
+        }
+        seen.add(`${a}|${b}`);
+      }
+      return backtrack;
+    }
+
+    function hasExcessBacktrack(cand){
+      return cand.backtrackM>Math.max(60,cand.distanceM*0.1);
     }
 
     async function fetchElevationGain(coordinates){
@@ -1771,26 +1830,6 @@
       }catch(_){return 0;}
     }
 
-    async function fetchRouteWithWaypoint(start,waypoint,end){
-      let lastError=null;
-      for(const baseUrl of orderedOsrmEndpoints()){
-        const controller=new AbortController();
-        const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${start.lng},${start.lat};${waypoint.lng},${waypoint.lat};${end.lng},${end.lat}?overview=full&geometries=geojson${buildOsrmRadiuses([start,waypoint,end])}`;
-        try{
-          const response=await fetch(url,{signal:controller.signal});
-          if(!response.ok)throw new Error(`OSRM ${response.status}`);
-          const data=await response.json();
-          if(data&&Array.isArray(data.routes)&&data.routes.length){
-            rememberOsrmEndpoint(baseUrl);
-            return data;
-          }
-          throw new Error('Resposta buida');
-        }catch(err){lastError=err;}finally{clearTimeout(timeoutId);}
-      }
-      throw lastError||new Error('No s\'ha pogut obtenir ruta de tornada');
-    }
-
     async function generateReturnRoute(destination,origin){
       const dlat=origin.lat-destination.lat;
       const dlng=origin.lng-destination.lng;
@@ -1807,9 +1846,15 @@
         };
         try{
           debugLog('Generant ruta de tornada amb waypoint alternatiu...');
-          const data=await fetchRouteWithWaypoint(destination,waypoint,origin);
-          debugLog(`Ruta de tornada obtinguda: ${data.routes[0].geometry.coordinates.length} punts`);
-          return data.routes[0].geometry.coordinates;
+          const data=await fetchOsrmRoute([destination,waypoint,origin]);
+          const route=data.routes[0];
+          const coords=route.geometry.coordinates;
+          const backtrackM=computeBacktrackMeters(coords);
+          if(backtrackM<=Math.max(60,route.distance*0.1)){
+            debugLog(`Ruta de tornada obtinguda: ${coords.length} punts`);
+            return coords;
+          }
+          debugLog(`Tornada amb ${Math.round(backtrackM)} m d'anada i tornada, provant directa`);
         }catch(err){
           debugLog(`Ruta amb waypoint fallida, provant directa: ${(err&&err.message)||err}`);
         }
@@ -1835,11 +1880,34 @@
       });
     }
 
+    /* Dues geolocalitzacions intermèdies aleatòries en la mateixa direcció
+       (al 40% i al 75% del radi, amb desviació lateral de fins a ±26°): la
+       ruta passa per carrers variats en lloc del camí més curt, sense
+       canviar de rumb general */
+    const VIA_FRACTIONS=[0.4,0.75];
+    const VIA_JITTER_RAD=Math.PI/7;
+    const MIN_RADIUS_FOR_VIAS_M=500;
+
+    function buildOutboundVias(start,bearing,radiusM){
+      return VIA_FRACTIONS.map(f=>{
+        const jitter=(Math.random()*2-1)*VIA_JITTER_RAD;
+        return destinationFromBearing(start,radiusM*f,bearing+jitter);
+      });
+    }
+
     /* Fetches one walkable route towards a fixed bearing and returns it as a
-       candidate with its real on-foot distance */
+       candidate with its real on-foot distance and backtrack meters */
     async function fetchCandidateRoute(start,bearing,radiusM){
       const destination=destinationFromBearing(start,radiusM,bearing);
-      const data=await fetchRouteWithOsrm(start,destination);
+      let data=null;
+      if(radiusM>=MIN_RADIUS_FOR_VIAS_M){
+        try{
+          data=await fetchOsrmRoute([start,...buildOutboundVias(start,bearing,radiusM),destination]);
+        }catch(err){
+          debugLog(`Ruta amb punts intermedis fallida, provant directa: ${(err&&err.message)||err}`);
+        }
+      }
+      if(!data)data=await fetchOsrmRoute([start,destination]);
       const route=data.routes[0];
       if(!route||typeof route.distance!=='number')throw new Error('Ruta invàlida');
       const coords=route.geometry&&route.geometry.coordinates;
@@ -1849,6 +1917,7 @@
         bearing,
         coords,
         distanceM:route.distance,
+        backtrackM:computeBacktrackMeters(coords),
         destination:{lat:coords[coords.length-1][1],lng:coords[coords.length-1][0]}
       };
     }
@@ -1878,9 +1947,12 @@
         }
         const cand=r.value;
         const diffKm=Math.abs(cand.distanceM-targetM)/1000;
-        if(diffKm<=DISTANCE_TOLERANCE_KM){
+        if(diffKm<=DISTANCE_TOLERANCE_KM&&!hasExcessBacktrack(cand)){
           options.push(cand);
         }else{
+          if(hasExcessBacktrack(cand)){
+            debugLog(`Opció ${i+1} amb ${Math.round(cand.backtrackM)} m d'anada i tornada, reintentant amb altres punts intermedis`);
+          }
           const corrected=Math.min(Math.max(radius*(targetM/cand.distanceM),300),targetM*1.5);
           retries.push({bearing:cand.bearing,radius:corrected,fallback:cand});
         }
@@ -1889,8 +1961,15 @@
       if(retries.length){
         const retryResults=await Promise.allSettled(retries.map(r=>fetchCandidateRoute(start,r.bearing,r.radius)));
         retryResults.forEach((r,i)=>{
-          if(r.status==='fulfilled')options.push(r.value);
-          else if(retries[i].fallback)options.push(retries[i].fallback);
+          const fallback=retries[i].fallback;
+          if(r.status==='fulfilled'){
+            const cand=r.value;
+            /* Si el reintent torna a repetir trams però el primer intent era
+               net (només desviat de distància), queda't el primer */
+            options.push(fallback&&!hasExcessBacktrack(fallback)&&hasExcessBacktrack(cand)?fallback:cand);
+          }else if(fallback){
+            options.push(fallback);
+          }
         });
       }
 
@@ -1914,12 +1993,13 @@
 
       const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius)));
       let best=null;
-      let bestDiff=Infinity;
+      let bestScore=Infinity;
       let lastError=null;
       results.forEach(r=>{
         if(r.status!=='fulfilled'){lastError=r.reason;return;}
-        const diff=Math.abs(r.value.distanceM-targetM);
-        if(diff<bestDiff){bestDiff=diff;best=r.value;}
+        /* Penalitza fort les candidates que repeteixen trams de carrer */
+        const score=Math.abs(r.value.distanceM-targetM)+(hasExcessBacktrack(r.value)?100000:0);
+        if(score<bestScore){bestScore=score;best=r.value;}
       });
 
       if(!best){
