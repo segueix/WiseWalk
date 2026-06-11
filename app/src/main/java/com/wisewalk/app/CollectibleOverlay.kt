@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.view.MotionEvent
 import android.view.animation.LinearInterpolator
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -16,9 +17,11 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Floating collectible items (food/toys for the Tamagotchi pet) placed along
- * the route. Each item is a white badge with an accent vector icon that bobs
- * gently; claimed items shrink away. All access happens on the UI thread.
+ * Floating collectible items (food/toys for the Tamagotchi pet) placed beside
+ * the route. Each item is a white badge with a vector icon colored by item
+ * type that bobs gently; claimed items shrink away. Tapping a badge fires
+ * [onItemTapped] so the web layer can decide whether the user is close enough
+ * to claim it. All access happens on the UI thread.
  */
 class CollectibleOverlay : Overlay() {
 
@@ -26,7 +29,19 @@ class CollectibleOverlay : Overlay() {
         var scale: Float = 1f
     }
 
+    /** Notified with the item id when the user taps a collectible badge. */
+    var onItemTapped: ((String) -> Unit)? = null
+
     private val items = mutableListOf<Item>()
+
+    private val typeColors = mapOf(
+        "apple" to Color.parseColor("#e05a4e"),  // vermell poma
+        "cookie" to Color.parseColor("#b5803c"), // marró galeta
+        "ball" to Color.parseColor("#4a90d9"),   // blau pilota
+        "star" to Color.parseColor("#e8b73a")    // daurat estrella
+    )
+
+    private fun colorFor(type: String): Int = typeColors[type] ?: MapStyle.accent
 
     private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
@@ -118,15 +133,15 @@ class CollectibleOverlay : Overlay() {
 
         val projection = mapView.projection
         val density = mapView.context.resources.displayMetrics.density
-        val accent = MapStyle.accent
-        ringPaint.color = accent
         ringPaint.strokeWidth = 2f * density
-        iconFillPaint.color = accent
-        iconStrokePaint.color = accent
         iconStrokePaint.strokeWidth = 1.6f * density
 
         items.forEachIndexed { index, item ->
             if (item.scale <= 0f) return@forEachIndexed
+            val itemColor = colorFor(item.type)
+            ringPaint.color = itemColor
+            iconFillPaint.color = itemColor
+            iconStrokePaint.color = itemColor
             val pt = projection.toPixels(item.position, null)
             val x = pt.x.toFloat()
             val bob = sin((bobPhase * 2f * Math.PI).toFloat() + index * 1.7f) * bobAmplitudeDp * density
@@ -145,6 +160,28 @@ class CollectibleOverlay : Overlay() {
             canvas.drawCircle(x, y, radius, ringPaint)
             drawIcon(canvas, item.type, x, y, radius * 0.55f, density)
         }
+    }
+
+    override fun onSingleTapConfirmed(e: MotionEvent, mapView: MapView): Boolean {
+        if (items.isEmpty()) return false
+        val projection = mapView.projection
+        val density = mapView.context.resources.displayMetrics.density
+        // Generous touch target around the badge center (the badge bobs a few
+        // dp, so we ignore the bob offset here)
+        val touchRadius = badgeRadiusDp * density * 2.2f
+        items.forEach { item ->
+            if (item.scale <= 0f) return@forEach
+            val pt = projection.toPixels(item.position, null)
+            val cx = pt.x.toFloat()
+            val cy = pt.y.toFloat() - badgeRadiusDp * density * 0.4f
+            val dx = e.x - cx
+            val dy = e.y - cy
+            if (dx * dx + dy * dy <= touchRadius * touchRadius) {
+                onItemTapped?.invoke(item.id)
+                return true
+            }
+        }
+        return false
     }
 
     private fun drawIcon(canvas: Canvas, type: String, cx: Float, cy: Float, size: Float, density: Float) {

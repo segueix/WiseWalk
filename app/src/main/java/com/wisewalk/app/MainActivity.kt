@@ -20,6 +20,8 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -229,8 +231,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val statsJson = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON)
                 if (statsJson != null) {
                     sendStatsToWeb(statsJson)
-                } else if (intent.getBooleanExtra("water_update", false)) {
-                    sendWaterToWeb(intent.getIntExtra("water_glasses", 0))
                 }
             }
         }
@@ -326,6 +326,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         )
         mapView = binding.mapView
         mapView.setTileSource(if (MapStyle.isDark) CartoTileSources.DARK else CartoTileSources.LIGHT)
+        applyMapTileTheme()
         mapView.setMultiTouchControls(true)
         mapView.setBuiltInZoomControls(false)
         mapView.minZoomLevel = 3.0
@@ -481,11 +482,40 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (mapView.tileProvider.tileSource !== tileSource) {
             mapView.setTileSource(tileSource)
         }
+        applyMapTileTheme()
         if (::myLocationOverlay.isInitialized) {
             myLocationOverlay.setDirectionArrow(createLocationMarkerBitmap(), createDirectionArrowBitmap())
         }
         applyMapControlTheme()
         mapView.invalidate()
+    }
+
+    /** In dark mode the Carto Dark Matter tiles are almost black; lift them
+     * towards a softer mid gray so the map stays readable at night. */
+    private fun applyMapTileTheme() {
+        val tilesOverlay = mapView.overlayManager.tilesOverlay
+        if (MapStyle.isDark) {
+            val scale = 1.15f
+            val lift = 52f
+            tilesOverlay.setColorFilter(
+                ColorMatrixColorFilter(
+                    ColorMatrix(
+                        floatArrayOf(
+                            scale, 0f, 0f, 0f, lift,
+                            0f, scale, 0f, 0f, lift,
+                            0f, 0f, scale, 0f, lift,
+                            0f, 0f, 0f, 1f, 0f
+                        )
+                    )
+                )
+            )
+            tilesOverlay.loadingBackgroundColor = Color.parseColor("#454a4a")
+            tilesOverlay.loadingLineColor = Color.parseColor("#535959")
+        } else {
+            tilesOverlay.setColorFilter(null)
+            tilesOverlay.loadingBackgroundColor = Color.parseColor("#e8e6e1")
+            tilesOverlay.loadingLineColor = Color.parseColor("#d8d5cd")
+        }
     }
 
     private fun applyMapControlTheme() {
@@ -666,15 +696,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun sendStatsToWeb(statsJson: String) {
-        val js = "window.wiseWalkOnStatsUpdate && window.wiseWalkOnStatsUpdate($statsJson);"
+    private fun notifyCollectibleTapped(id: String) {
+        val escaped = id.replace("\\", "").replace("'", "")
+        val js = "window.wiseWalkOnCollectibleTapped && window.wiseWalkOnCollectibleTapped('$escaped');"
         binding.webView.post {
             binding.webView.evaluateJavascript(js, null)
         }
     }
 
-    private fun sendWaterToWeb(glasses: Int) {
-        val js = "window.wiseWalkOnWaterUpdate && window.wiseWalkOnWaterUpdate($glasses);"
+    private fun sendStatsToWeb(statsJson: String) {
+        val js = "window.wiseWalkOnStatsUpdate && window.wiseWalkOnStatsUpdate($statsJson);"
         binding.webView.post {
             binding.webView.evaluateJavascript(js, null)
         }
@@ -825,8 +856,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 .putString("profile_sex", o.optString("sex", "M"))
                 .putInt("profile_height_cm", o.optInt("heightCm", 170))
                 .putFloat("profile_weight_kg", o.optDouble("weightKg", 70.0).toFloat())
-                .putString("wake_time", o.optString("wakeTime", "07:00"))
-                .putString("sleep_time", o.optString("sleepTime", "23:00"))
                 .apply()
 
         } catch (_: Throwable) {}
@@ -1117,28 +1146,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     put("steps", steps)
                     put("distanceKm", Math.round(steps * strideMeters / 100.0) / 10.0)
                     put("walkingMin", walkingMin)
-                    put("waterGlasses", prefs.getInt("water_glasses_$today", 0))
-                    put("waterGoal", prefs.getInt("water_goal_glasses", 8))
                 }.toString()
             } catch (e: Throwable) {
                 Log.w("WiseWalk", "getDailyStats: error llegint estadístiques", e)
                 "{}"
-            }
-        }
-
-        @JavascriptInterface
-        fun addWaterGlass() {
-            activity.runOnUiThread {
-                if (StepTrackingService.isRunning) {
-                    activity.sendBroadcast(Intent(StepTrackingService.ACTION_WATER_DRINK).apply {
-                        setPackage(activity.packageName)
-                    })
-                } else {
-                    val today = java.time.LocalDate.now().toString()
-                    val newVal = activity.prefs.getInt("water_glasses_$today", 0) + 1
-                    activity.prefs.edit().putInt("water_glasses_$today", newVal).apply()
-                    activity.sendWaterToWeb(newVal)
-                }
             }
         }
 
@@ -1170,8 +1181,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         if (lat.isNaN() || lng.isNaN()) continue
                         items.add(CollectibleOverlay.Item(o.optString("id"), GeoPoint(lat, lng), o.optString("type", "apple")))
                     }
-                    val overlay = activity.collectibleOverlay ?: CollectibleOverlay().also {
-                        activity.collectibleOverlay = it
+                    val overlay = activity.collectibleOverlay ?: CollectibleOverlay().also { created ->
+                        created.onItemTapped = { id -> activity.notifyCollectibleTapped(id) }
+                        activity.collectibleOverlay = created
                     }
                     if (!activity.mapView.overlays.contains(overlay)) {
                         val markerIdx = activity.mapView.overlays.indexOf(activity.destinationMarker)
