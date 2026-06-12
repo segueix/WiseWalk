@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -18,6 +20,8 @@ import android.os.StrictMode
 import java.io.File
 import android.os.Looper
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -33,6 +37,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.view.View
 import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -48,10 +53,10 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import kotlin.concurrent.thread
@@ -66,6 +71,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
     private var locationReceiver: BroadcastReceiver? = null
+    private var statsReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
     private var isCompassEnabled: Boolean = false
     private var pendingLocationRequest: Boolean = false
@@ -76,7 +82,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var routePolyline: ArrowRouteOverlay? = null
     private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
+    private var destinationMarkerStyle: String = "flag"
+    private var collectibleOverlay: CollectibleOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
+    private var copyrightOverlay: CopyrightOverlay? = null
+    private var lastBearing: Float = 0f
+    private var hasBearingFix: Boolean = false
     private var isProgrammaticMapMove: Boolean = false
     private var isPickerModeActive: Boolean = false
 
@@ -185,6 +196,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 val bearing = intent.getFloatExtra(StepTrackingService.EXTRA_BEARING, 0f)
                 if (lat != 0.0 && lng != 0.0) {
                     sendLocationToWeb(lat, lng)
+                    lastBearing = bearing
+                    hasBearingFix = true
+                    snappedLocationOverlay?.updateBearing(bearing)
                     val loc = Location("fused")
                     loc.latitude = lat
                     loc.longitude = lng
@@ -211,6 +225,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             registerReceiver(locationReceiver, locationFilter)
         }
 
+        statsReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != StepTrackingService.ACTION_STATS_UPDATE) return
+                val statsJson = intent.getStringExtra(StepTrackingService.EXTRA_STATS_JSON)
+                if (statsJson != null) {
+                    sendStatsToWeb(statsJson)
+                }
+            }
+        }
+        val statsFilter = IntentFilter(StepTrackingService.ACTION_STATS_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statsReceiver, statsFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(statsReceiver, statsFilter)
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (wv.canGoBack()) wv.goBack() else finish()
@@ -229,6 +259,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
         destinationMarker?.startAnimation(mapView)
+        routePolyline?.startAnimation(mapView)
+        snappedLocationOverlay?.startAnimation(mapView)
+        collectibleOverlay?.let { if (it.hasItems()) it.startAnimation(mapView) }
         if (isWalkGpsModeActive && isCompassEnabled) {
             rotationSensor?.let {
                 sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
@@ -241,6 +274,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.onPause()
         if (::myLocationOverlay.isInitialized) myLocationOverlay.disableMyLocation()
         destinationMarker?.stopAnimation()
+        routePolyline?.stopAnimation()
+        snappedLocationOverlay?.stopAnimation()
+        collectibleOverlay?.stopAnimation()
         sensorManager.unregisterListener(this)
     }
 
@@ -258,6 +294,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
         locationReceiver = null
+        statsReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: IllegalArgumentException) {
+                Log.w("WiseWalk", "Stats receiver was already unregistered", e)
+            }
+        }
+        statsReceiver = null
         removeOneShotLocationCallback()
         pendingGeolocationCallback = null
         pendingGeolocationOrigin = null
@@ -276,8 +320,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun initMap() {
+        MapStyle.update(
+            prefs.getBoolean("map_theme_dark", false),
+            prefs.getString("map_theme_accent", "#3d7a6b") ?: "#3d7a6b"
+        )
         mapView = binding.mapView
-        mapView.setTileSource(TileSourceFactory.MAPNIK)
+        mapView.setTileSource(if (MapStyle.isDark) CartoTileSources.DARK else CartoTileSources.LIGHT)
+        applyMapTileTheme()
         mapView.setMultiTouchControls(true)
         mapView.setBuiltInZoomControls(false)
         mapView.minZoomLevel = 3.0
@@ -286,6 +335,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.isTilesScaledToDpi = true
         mapView.isHorizontalMapRepetitionEnabled = false
         mapView.isVerticalMapRepetitionEnabled = false
+
+        copyrightOverlay = CopyrightOverlay(this).also { mapView.overlays.add(it) }
+        applyMapControlTheme()
 
         myLocationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), mapView)
         val locationMarkerBitmap = createLocationMarkerBitmap()
@@ -412,7 +464,79 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
             mapView.mapOrientation = 0f
             destinationMarker?.stopAnimation()
+            routePolyline?.stopAnimation()
+            snappedLocationOverlay?.stopAnimation()
+            collectibleOverlay?.stopAnimation()
         }
+    }
+
+    private fun applyMapTheme(isDark: Boolean, accentHex: String) {
+        MapStyle.update(isDark, accentHex)
+        prefs.edit()
+            .putBoolean("map_theme_dark", MapStyle.isDark)
+            .putString("map_theme_accent", accentHex)
+            .apply()
+        if (!::mapView.isInitialized) return
+
+        val tileSource = if (MapStyle.isDark) CartoTileSources.DARK else CartoTileSources.LIGHT
+        if (mapView.tileProvider.tileSource !== tileSource) {
+            mapView.setTileSource(tileSource)
+        }
+        applyMapTileTheme()
+        if (::myLocationOverlay.isInitialized) {
+            myLocationOverlay.setDirectionArrow(createLocationMarkerBitmap(), createDirectionArrowBitmap())
+        }
+        applyMapControlTheme()
+        mapView.invalidate()
+    }
+
+    /** In dark mode the Carto Dark Matter tiles are almost black; lift them
+     * towards a softer mid gray so the map stays readable at night. */
+    private fun applyMapTileTheme() {
+        val tilesOverlay = mapView.overlayManager.tilesOverlay
+        if (MapStyle.isDark) {
+            val scale = 1.15f
+            val lift = 52f
+            tilesOverlay.setColorFilter(
+                ColorMatrixColorFilter(
+                    ColorMatrix(
+                        floatArrayOf(
+                            scale, 0f, 0f, 0f, lift,
+                            0f, scale, 0f, 0f, lift,
+                            0f, 0f, scale, 0f, lift,
+                            0f, 0f, 0f, 1f, 0f
+                        )
+                    )
+                )
+            )
+            tilesOverlay.loadingBackgroundColor = Color.parseColor("#454a4a")
+            tilesOverlay.loadingLineColor = Color.parseColor("#535959")
+        } else {
+            tilesOverlay.setColorFilter(null)
+            tilesOverlay.loadingBackgroundColor = Color.parseColor("#e8e6e1")
+            tilesOverlay.loadingLineColor = Color.parseColor("#d8d5cd")
+        }
+    }
+
+    private fun applyMapControlTheme() {
+        val bg = MapStyle.controlBackground
+        val fg = MapStyle.controlForeground
+        listOf(R.id.btn_zoom_in, R.id.btn_zoom_out).forEach { id ->
+            findViewById<TextView>(id).apply {
+                (background.mutate() as? GradientDrawable)?.setColor(bg)
+                setTextColor(fg)
+            }
+        }
+        listOf(R.id.btn_center_me, R.id.btn_compass_toggle).forEach { id ->
+            findViewById<ImageButton>(id).apply {
+                (background.mutate() as? GradientDrawable)?.setColor(bg)
+                imageTintList = ColorStateList.valueOf(fg)
+            }
+        }
+        findViewById<TextView>(R.id.btnConfirmPickerNative).apply {
+            (background.mutate() as? GradientDrawable)?.setColor(MapStyle.accent)
+        }
+        copyrightOverlay?.setTextColor(MapStyle.copyrightText)
     }
 
     private fun createLocationMarkerBitmap(): Bitmap {
@@ -421,20 +545,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(130, 255, 255, 255)
+        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
             style = Paint.Style.FILL
         }
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 2f * density
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = MapStyle.accent
+            style = Paint.Style.FILL
         }
         val radius = sizePx / 2f - (2f * density)
         val cx = sizePx / 2f
         val cy = sizePx / 2f
-        canvas.drawCircle(cx, cy, radius, fillPaint)
-        canvas.drawCircle(cx, cy, radius, strokePaint)
+        canvas.drawCircle(cx, cy, radius, ringPaint)
+        canvas.drawCircle(cx, cy, radius * 0.78f, dotPaint)
         return bitmap
     }
 
@@ -443,21 +566,31 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val sizePx = (960f * density).toInt().coerceAtLeast(720)
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = MapStyle.accent
+            style = Paint.Style.FILL
+        }
+        val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.FILL
         }
         val cx = sizePx / 2f
         val cy = sizePx / 2f
         val radius = sizePx / 2f
+        canvas.drawCircle(cx, cy, radius, ringPaint)
+        canvas.drawCircle(cx, cy, radius * 0.85f, dotPaint)
         val arrowPath = Path().apply {
-            moveTo(cx, cy - radius * 0.9f)
-            lineTo(cx - radius * 0.42f, cy + radius * 0.45f)
-            lineTo(cx, cy + radius * 0.2f)
-            lineTo(cx + radius * 0.42f, cy + radius * 0.45f)
+            moveTo(cx, cy - radius * 0.55f)
+            lineTo(cx - radius * 0.32f, cy + radius * 0.32f)
+            lineTo(cx, cy + radius * 0.12f)
+            lineTo(cx + radius * 0.32f, cy + radius * 0.32f)
             close()
         }
-        canvas.drawPath(arrowPath, paint)
+        canvas.drawPath(arrowPath, arrowPaint)
         return bitmap
     }
 
@@ -563,6 +696,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    private fun notifyCollectibleTapped(id: String) {
+        val escaped = id.replace("\\", "").replace("'", "")
+        val js = "window.wiseWalkOnCollectibleTapped && window.wiseWalkOnCollectibleTapped('$escaped');"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
+    private fun sendStatsToWeb(statsJson: String) {
+        val js = "window.wiseWalkOnStatsUpdate && window.wiseWalkOnStatsUpdate($statsJson);"
+        binding.webView.post {
+            binding.webView.evaluateJavascript(js, null)
+        }
+    }
+
     private fun sendLocationErrorToWeb(message: String) {
         val escaped = message.replace("'", "\\'")
         val js = "window.wiseWalkOnLocationError && window.wiseWalkOnLocationError('$escaped');"
@@ -597,27 +745,42 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 runOnUiThread {
                     try {
                         mapView.overlays.clear()
+                        copyrightOverlay?.let { mapView.overlays.add(it) }
                         if (::myLocationOverlay.isInitialized) {
                             mapView.overlays.add(myLocationOverlay)
                         }
+                        routePolyline?.stopAnimation()
                         val arrowOverlay = ArrowRouteOverlay().apply {
                             setPoints(points)
                         }
                         routePolyline = arrowOverlay
                         mapView.overlays.add(arrowOverlay)
+                        arrowOverlay.startAnimation(mapView)
+
+                        // Collectible items render above the route, below markers
+                        collectibleOverlay?.let {
+                            mapView.overlays.add(it)
+                            if (it.hasItems()) it.startAnimation(mapView)
+                        }
 
                         // Add pulsing destination marker at last point
                         destinationMarker?.stopAnimation()
                         val marker = PulsingMarkerOverlay(points.last())
+                        marker.markerStyle = destinationMarkerStyle
                         destinationMarker = marker
                         mapView.overlays.add(marker)
                         marker.startAnimation(mapView)
 
                         // Add snapped location overlay on top of everything
+                        snappedLocationOverlay?.stopAnimation()
                         snappedLocationOverlay?.let { mapView.overlays.remove(it) }
                         val snappedOverlay = SnappedLocationOverlay()
                         snappedLocationOverlay = snappedOverlay
+                        if (hasBearingFix) {
+                            snappedOverlay.updateBearing(lastBearing)
+                        }
                         mapView.overlays.add(snappedOverlay)
+                        snappedOverlay.startAnimation(mapView)
 
                         if (mapView.width > 0 && mapView.height > 0) {
                             isProgrammaticMapMove = true
@@ -673,6 +836,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                             }
                             routePolyline = arrowOverlay
                             mapView.overlays.add(arrowOverlay)
+                            arrowOverlay.startAnimation(mapView)
                             mapView.invalidate()
                         }
                     } catch (e: Throwable) {
@@ -692,8 +856,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 .putString("profile_sex", o.optString("sex", "M"))
                 .putInt("profile_height_cm", o.optInt("heightCm", 170))
                 .putFloat("profile_weight_kg", o.optDouble("weightKg", 70.0).toFloat())
-                .putString("wake_time", o.optString("wakeTime", "07:00"))
-                .putString("sleep_time", o.optString("sleepTime", "23:00"))
                 .apply()
 
         } catch (_: Throwable) {}
@@ -907,6 +1069,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fun updateSnappedPosition(lat: Double, lng: Double, snapped: Boolean) {
             activity.runOnUiThread {
                 activity.snappedLocationOverlay?.updatePosition(lat, lng, snapped)
+                activity.routePolyline?.setProgress(lat, lng)
                 if (activity::myLocationOverlay.isInitialized) {
                     if (snapped) {
                         activity.myLocationOverlay.isDrawAccuracyEnabled = false
@@ -945,12 +1108,121 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         activity.myLocationOverlay.enableMyLocation()
                         activity.myLocationOverlay.enableFollowLocation()
                     }
+                    activity.destinationMarker?.startAnimation(activity.mapView)
+                    activity.routePolyline?.startAnimation(activity.mapView)
+                    activity.snappedLocationOverlay?.startAnimation(activity.mapView)
                     activity.mapView.invalidate()
                 } else {
                     activity.mapView.visibility = View.GONE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
                     activity.mapView.mapOrientation = 0f
                     activity.destinationMarker?.stopAnimation()
+                    activity.routePolyline?.stopAnimation()
+                    activity.snappedLocationOverlay?.stopAnimation()
+                    activity.collectibleOverlay?.stopAnimation()
+                }
+            }
+        }
+
+        /** Daily stats snapshot from prefs, for the initial paint before the
+         * step service broadcasts its first ACTION_STATS_UPDATE. */
+        @JavascriptInterface
+        fun getDailyStats(): String {
+            return try {
+                val prefs = activity.prefs
+                val today = java.time.LocalDate.now().toString()
+                val sameDay = prefs.getString("today_key", null) == today
+                val baseline = if (sameDay && prefs.contains("baseline_steps_total")) prefs.getLong("baseline_steps_total", 0L) else null
+                val last = if (sameDay && prefs.contains("last_total_steps")) prefs.getLong("last_total_steps", 0L) else null
+                val steps = if (baseline != null && last != null) (last - baseline).coerceAtLeast(0L) else 0L
+                val heightCm = prefs.getInt("profile_height_cm", 170).toDouble()
+                val strideMeters = heightCm / 100.0 * when ((prefs.getString("profile_sex", "M") ?: "M").uppercase()) {
+                    "M" -> 0.415
+                    "F" -> 0.413
+                    else -> 0.414
+                }
+                val walkingMin = if (sameDay) (prefs.getLong("walking_time_ms", 0L) / 60000L).toInt() else 0
+                JSONObject().apply {
+                    put("steps", steps)
+                    put("distanceKm", Math.round(steps * strideMeters / 100.0) / 10.0)
+                    put("walkingMin", walkingMin)
+                }.toString()
+            } catch (e: Throwable) {
+                Log.w("WiseWalk", "getDailyStats: error llegint estadístiques", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun updatePetState(petJson: String) {
+            try {
+                val o = JSONObject(petJson)
+                activity.prefs.edit()
+                    .putBoolean("pet_exists", o.optBoolean("exists", false))
+                    .putString("pet_name", o.optString("name", ""))
+                    .putInt("pet_hunger", o.optInt("hunger", 100))
+                    .putLong("pet_synced_at", System.currentTimeMillis())
+                    .apply()
+            } catch (e: Throwable) {
+                Log.w("WiseWalk", "updatePetState: error desant estat de la mascota", e)
+            }
+        }
+
+        @JavascriptInterface
+        fun drawCollectibles(itemsJson: String) {
+            activity.runOnUiThread {
+                try {
+                    val arr = JSONArray(itemsJson)
+                    val items = mutableListOf<CollectibleOverlay.Item>()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val lat = o.optDouble("lat", Double.NaN)
+                        val lng = o.optDouble("lng", Double.NaN)
+                        if (lat.isNaN() || lng.isNaN()) continue
+                        items.add(CollectibleOverlay.Item(o.optString("id"), GeoPoint(lat, lng), o.optString("type", "apple")))
+                    }
+                    val overlay = activity.collectibleOverlay ?: CollectibleOverlay().also { created ->
+                        created.onItemTapped = { id -> activity.notifyCollectibleTapped(id) }
+                        activity.collectibleOverlay = created
+                    }
+                    if (!activity.mapView.overlays.contains(overlay)) {
+                        val markerIdx = activity.mapView.overlays.indexOf(activity.destinationMarker)
+                        if (markerIdx >= 0) activity.mapView.overlays.add(markerIdx, overlay)
+                        else activity.mapView.overlays.add(overlay)
+                    }
+                    overlay.setItems(items, activity.mapView)
+                    activity.mapView.invalidate()
+                } catch (e: Throwable) {
+                    Log.e("WiseWalk", "drawCollectibles: error processant elements", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun removeCollectible(id: String) {
+            activity.runOnUiThread {
+                activity.collectibleOverlay?.removeItem(id, activity.mapView)
+            }
+        }
+
+        @JavascriptInterface
+        fun setDestinationMarkerStyle(style: String) {
+            activity.runOnUiThread {
+                activity.destinationMarkerStyle = if (style == "egg") "egg" else "flag"
+                activity.destinationMarker?.let {
+                    it.markerStyle = activity.destinationMarkerStyle
+                    activity.mapView.invalidate()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun setMapTheme(isDark: Boolean, accentHex: String) {
+            activity.runOnUiThread {
+                try {
+                    activity.applyMapTheme(isDark, accentHex)
+                } catch (e: Exception) {
+                    Log.w("WiseWalk", "Error applying map theme", e)
                 }
             }
         }

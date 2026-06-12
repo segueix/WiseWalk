@@ -1,16 +1,13 @@
 package com.wisewalk.app
 
-import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -19,7 +16,6 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
-import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -48,12 +44,7 @@ class StepTrackingService : Service(), SensorEventListener {
     private var goalKmActive: Double = 0.0
     private var activePlan: String = "maintain"
     private var weightKg: Double = 70.0
-    private var waterGoalGlasses: Int = 8
-    private var glassMl: Int = 300
-    private var wakeTime: String = "07:00"
-    private var sleepTime: String = "23:00"
 
-    private var waterReminderReceiver: BroadcastReceiver? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
     private var lastLocationForBearing: android.location.Location? = null
@@ -61,14 +52,12 @@ class StepTrackingService : Service(), SensorEventListener {
     companion object {
         const val CHANNEL_ID_SERVICE = "wisewalk_tracking"
         const val CHANNEL_ID_GOAL = "wisewalk_goal"
-        const val CHANNEL_ID_WATER = "wisewalk_water"
+        const val CHANNEL_ID_PET = "wisewalk_pet"
         const val NOTIF_ID_SERVICE = 1
         const val NOTIF_ID_GOAL = 1001
-        const val NOTIF_ID_WATER = 2001
-        
+        const val NOTIF_ID_PET = 3001
+
         const val ACTION_STATS_UPDATE = "com.wisewalk.app.STATS_UPDATE"
-        const val ACTION_WATER_REMINDER = "com.wisewalk.app.WATER_REMINDER"
-        const val ACTION_WATER_DRINK = "com.wisewalk.app.WATER_DRINK"
         const val ACTION_LOCATION_UPDATE = "com.wisewalk.app.LOCATION_UPDATE"
         const val ACTION_START_GPS = "com.wisewalk.app.START_GPS"
         const val ACTION_STOP_GPS = "com.wisewalk.app.STOP_GPS"
@@ -89,7 +78,6 @@ class StepTrackingService : Service(), SensorEventListener {
         stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         createNotificationChannels()
         loadProfileFromPrefs()
-        registerWaterReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -101,7 +89,6 @@ class StepTrackingService : Service(), SensorEventListener {
                     loadProfileFromPrefs()
                     startTrackingForeground()
                     registerStepListener()
-                    scheduleWaterReminders()
                 }
                 startLocationUpdates()
             }
@@ -112,10 +99,48 @@ class StepTrackingService : Service(), SensorEventListener {
                 loadProfileFromPrefs()
                 startTrackingForeground()
                 registerStepListener()
-                scheduleWaterReminders()
             }
         }
+        maybeNotifyPetHungry()
         return START_STICKY
+    }
+
+    /**
+     * Daily reminder when the Tamagotchi pet is hungry. The web layer syncs
+     * the pet state to prefs (updatePetState bridge); here we project the
+     * hunger decay since that sync and notify at most once per day.
+     */
+    private fun maybeNotifyPetHungry() {
+        if (!prefs.getBoolean("pet_exists", false)) return
+        if (wasNotifiedToday("pet")) return
+
+        val syncedAt = prefs.getLong("pet_synced_at", 0L)
+        if (syncedAt <= 0L) return
+        val daysSinceSync = ((System.currentTimeMillis() - syncedAt) / 86400000.0).coerceAtMost(3.0)
+        val projectedHunger = prefs.getInt("pet_hunger", 100) - (daysSinceSync * 15).toInt()
+        if (projectedHunger >= 30) return
+
+        val petName = prefs.getString("pet_name", null)?.takeIf { it.isNotBlank() } ?: "La teva mascota"
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            this, 2, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(this, CHANNEL_ID_PET)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("🐾 $petName té gana!")
+            .setContentText("Surt a fer una caminada i porta-li alguna cosa per menjar.")
+            .setAutoCancel(true)
+            .setContentIntent(openPendingIntent)
+            .build()
+
+        nm.notify(NOTIF_ID_PET, notif)
+        setNotifiedToday("pet")
     }
 
     private fun startTrackingForeground() {
@@ -146,7 +171,6 @@ class StepTrackingService : Service(), SensorEventListener {
         stopLocationUpdates()
         isRunning = false
         unregisterStepListener()
-        unregisterWaterReceiver()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -238,42 +262,10 @@ class StepTrackingService : Service(), SensorEventListener {
         return (((bearingDeg + 360.0) % 360.0)).toFloat()
     }
 
-    private fun registerWaterReceiver() {
-        waterReminderReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
-                    ACTION_WATER_REMINDER -> sendWaterReminder()
-                    ACTION_WATER_DRINK -> {
-                        addWaterGlass()
-                        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        nm.cancel(NOTIF_ID_WATER)
-                        // Schedule next reminder
-                        scheduleNextWaterReminder()
-                    }
-                }
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(ACTION_WATER_REMINDER)
-            addAction(ACTION_WATER_DRINK)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(waterReminderReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(waterReminderReceiver, filter)
-        }
-    }
-
-    private fun unregisterWaterReceiver() {
-        waterReminderReceiver?.let {
-            try { unregisterReceiver(it) } catch (_: Exception) {}
-        }
-    }
-
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            
+
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID_SERVICE,
                 "Seguiment de passos",
@@ -283,7 +275,7 @@ class StepTrackingService : Service(), SensorEventListener {
                 setShowBadge(false)
             }
             nm.createNotificationChannel(serviceChannel)
-            
+
             val goalChannel = NotificationChannel(
                 CHANNEL_ID_GOAL,
                 "Objectius WiseWalk",
@@ -292,24 +284,23 @@ class StepTrackingService : Service(), SensorEventListener {
                 description = "Notificacions quan s'assoleix l'objectiu diari"
             }
             nm.createNotificationChannel(goalChannel)
-            
-            val waterChannel = NotificationChannel(
-                CHANNEL_ID_WATER,
-                "Recordatoris d'hidratació",
+
+            val petChannel = NotificationChannel(
+                CHANNEL_ID_PET,
+                "La teva mascota",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Recordatoris per beure aigua"
+                description = "Avisos quan la mascota necessita atenció"
             }
-            nm.createNotificationChannel(waterChannel)
+            nm.createNotificationChannel(petChannel)
         }
     }
 
     private fun buildServiceNotification(): Notification {
         val stepsToday = getTodaySteps()
         val distanceKm = stepsToday.toDouble() * strideMeters / 1000.0
-        val waterGlasses = getTodayWaterGlasses()
         val pct = if (goalKmActive > 0) ((distanceKm / goalKmActive) * 100).toInt().coerceIn(0, 100) else 0
-        
+
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -317,11 +308,11 @@ class StepTrackingService : Service(), SensorEventListener {
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         return NotificationCompat.Builder(this, CHANNEL_ID_SERVICE)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentTitle("WiseWalk actiu")
-            .setContentText("$stepsToday passos · ${String.format("%.1f", distanceKm)} km ($pct%) · 💧$waterGlasses gots")
+            .setContentText("$stepsToday passos · ${String.format("%.1f", distanceKm)} km ($pct%)")
             .setOngoing(true)
             .setShowWhen(false)
             .setContentIntent(pendingIntent)
@@ -373,158 +364,6 @@ class StepTrackingService : Service(), SensorEventListener {
         return (last - baseline).coerceAtLeast(0L)
     }
 
-    // Water tracking (persistent)
-    private fun getTodayWaterGlasses(): Int {
-        return prefs.getInt("water_glasses_${todayKey()}", 0)
-    }
-
-    private fun setTodayWaterGlasses(glasses: Int) {
-        prefs.edit().putInt("water_glasses_${todayKey()}", glasses).apply()
-        updateServiceNotification()
-        broadcastWaterUpdate(glasses)
-    }
-
-    fun addWaterGlass() {
-        val current = getTodayWaterGlasses()
-        val newVal = current + 1
-        setTodayWaterGlasses(newVal)
-        
-        // Broadcast to update UI
-        val intent = Intent(ACTION_STATS_UPDATE).apply {
-            putExtra("water_update", true)
-            putExtra("water_glasses", newVal)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    private fun broadcastWaterUpdate(glasses: Int) {
-        val intent = Intent(ACTION_STATS_UPDATE).apply {
-            putExtra("water_update", true)
-            putExtra("water_glasses", glasses)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    // Water reminders (fins 3h abans de dormir)
-    private fun scheduleWaterReminders() {
-        // Cancel existing reminders first
-        cancelWaterReminders()
-        
-        // Check if within allowed time (not within 3h of sleep)
-        if (!isWithinWaterTime()) return
-        
-        // Schedule first reminder in 90 minutes
-        scheduleNextWaterReminder()
-    }
-
-    private fun isWithinWaterTime(): Boolean {
-        val now = java.time.LocalTime.now()
-        val sleepH = sleepTime.split(":").getOrNull(0)?.toIntOrNull() ?: 23
-        val sleepM = sleepTime.split(":").getOrNull(1)?.toIntOrNull() ?: 0
-        val sleepLocalTime = java.time.LocalTime.of(sleepH, sleepM)
-        val stopTime = sleepLocalTime.minusHours(3)
-        
-        // If stop time is after midnight (e.g., sleep at 1am, stop at 10pm previous day)
-        return if (stopTime.isAfter(sleepLocalTime)) {
-            now.isBefore(sleepLocalTime) || now.isAfter(stopTime)
-        } else {
-            now.isBefore(stopTime)
-        }
-    }
-
-    private fun scheduleNextWaterReminder() {
-        if (!isWithinWaterTime()) return
-        if (getTodayWaterGlasses() >= waterGoalGlasses) return
-        
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val reminderIntervalMs = 90 * 60 * 1000L // 90 minutes
-        
-        val intent = Intent(ACTION_WATER_REMINDER).apply {
-            setPackage(packageName)
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            this,
-            NOTIF_ID_WATER,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        try {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + reminderIntervalMs,
-                pendingIntent
-            )
-        } catch (_: SecurityException) {
-            // Fallback for devices without exact alarm permission
-            alarmManager.set(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + reminderIntervalMs,
-                pendingIntent
-            )
-        }
-    }
-
-    private fun cancelWaterReminders() {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(ACTION_WATER_REMINDER).apply {
-            setPackage(packageName)
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            this,
-            NOTIF_ID_WATER,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
-    }
-
-    private fun sendWaterReminder() {
-        val currentGlasses = getTodayWaterGlasses()
-        if (currentGlasses >= waterGoalGlasses) return
-        if (!isWithinWaterTime()) return
-        
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
-        // Open app intent
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("add_water", true)
-        }
-        val openPendingIntent = PendingIntent.getActivity(
-            this, 1, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // Drink water action - direct broadcast
-        val drinkIntent = Intent(ACTION_WATER_DRINK).apply {
-            setPackage(packageName)
-        }
-        val drinkPendingIntent = PendingIntent.getBroadcast(
-            this, 100, drinkIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val remaining = waterGoalGlasses - currentGlasses
-        val litersTotal = (waterGoalGlasses * glassMl / 1000.0)
-        
-        val notif = NotificationCompat.Builder(this, CHANNEL_ID_WATER)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("💧 Hora de beure aigua!")
-            .setContentText("Portes $currentGlasses de $waterGoalGlasses gots (${glassMl}ml). Falten $remaining.")
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Portes $currentGlasses de $waterGoalGlasses gots.\nObjectiu: ${String.format("%.1f", litersTotal)}L\nFalten $remaining gots per completar l'objectiu d'avui."))
-            .setAutoCancel(true)
-            .setContentIntent(openPendingIntent)
-            .addAction(android.R.drawable.ic_input_add, "✓ +1 got begut", drinkPendingIntent)
-            .setDefaults(Notification.DEFAULT_SOUND or Notification.DEFAULT_VIBRATE)
-            .build()
-
-        nm.notify(NOTIF_ID_WATER, notif)
-    }
-
     private fun setNotifiedToday(plan: String) {
         prefs.edit().putBoolean("notified_${todayKey()}_${plan}", true).apply()
     }
@@ -544,15 +383,12 @@ class StepTrackingService : Service(), SensorEventListener {
         weightKg = prefs.getFloat("profile_weight_kg", 70f).toDouble()
         activePlan = prefs.getString("active_plan", "maintain") ?: "maintain"
         goalKmActive = prefs.getFloat("goal_km_${activePlan}", 0f).toDouble()
-        waterGoalGlasses = prefs.getInt("water_goal_glasses", 8)
-        glassMl = prefs.getInt("glass_ml", 300)
-        wakeTime = prefs.getString("wake_time", "07:00") ?: "07:00"
-        sleepTime = prefs.getString("sleep_time", "23:00") ?: "23:00"
     }
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
         resetIfNewDay()
+        maybeNotifyPetHungry()
 
         val total = event.values[0].toLong()
         val baseline = baselineTotalOrNull()
@@ -588,7 +424,7 @@ class StepTrackingService : Service(), SensorEventListener {
         val speedKmh = if (walkingTimeMs > 0L) {
             distanceKm / (walkingTimeMs.toDouble() / 3_600_000.0)
         } else 0.0
-        
+
         val met = (2.0 + (speedKmh - 3.0) * 0.5).coerceIn(2.5, 5.0)
         val kcal = ((met * 3.5 * weightKg) / 200.0) * (walkingTimeMs / 60000.0)
 
@@ -604,7 +440,6 @@ class StepTrackingService : Service(), SensorEventListener {
             put("kcal", Math.round(kcal))
             put("activePlan", activePlan)
             put("goalReached", goalReached)
-            put("waterGlasses", getTodayWaterGlasses())
         }
 
         broadcastStats(stats)
@@ -630,7 +465,7 @@ class StepTrackingService : Service(), SensorEventListener {
 
     private fun sendGoalNotification() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        
+
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -638,7 +473,7 @@ class StepTrackingService : Service(), SensorEventListener {
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         val notif = NotificationCompat.Builder(this, CHANNEL_ID_GOAL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("🎉 Objectiu assolit!")
