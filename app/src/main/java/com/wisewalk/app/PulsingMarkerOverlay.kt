@@ -17,8 +17,9 @@ import java.lang.ref.WeakReference
  * Destination marker: an accent-colored map pin with a white core, soft
  * ground shadow, expanding ripple rings and a Pokémon GO-style drop-in
  * bounce when it first appears.
- * With [markerStyle] = "egg" it renders a mystery egg instead of the pin
- * (used until the user adopts the Tamagotchi pet).
+ * With [markerStyle] = "egg" it renders a golden mystery egg centered on the
+ * destination point instead of the pin (used until the user adopts the
+ * Tamagotchi pet).
  */
 class PulsingMarkerOverlay(
     private var position: GeoPoint
@@ -50,6 +51,10 @@ class PulsingMarkerOverlay(
     private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
     }
+
+    /** Vivid shell and spot colors so the egg stands out against the map. */
+    private val eggShellColor = Color.parseColor("#ffb300")
+    private val eggSpotColor = Color.parseColor("#ff5252")
 
     private val headRadiusDp = 11f
     private val stemLengthDp = 13f
@@ -145,7 +150,7 @@ class PulsingMarkerOverlay(
         val dropOffset = (1f - dropProgress) * dropHeightDp * density
 
         if (markerStyle == "egg") {
-            drawEgg(canvas, x, y, density, accent, dropOffset)
+            drawEgg(canvas, x, y, density, dropOffset)
             return
         }
 
@@ -168,21 +173,21 @@ class PulsingMarkerOverlay(
         canvas.drawCircle(x, headCenterY, coreRadiusDp * density, corePaint)
     }
 
-    /** Mystery egg: white oval with accent spots resting on the ground point. */
-    private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, accent: Int, dropOffset: Float) {
+    /** Mystery egg: golden oval with coral spots centered on the arrival point. */
+    private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, dropOffset: Float) {
         val eggWidth = 57f * density
         val eggHeight = 72f * density
-        val bottom = y - dropOffset
-        val top = bottom - eggHeight
+        val centerY = y - dropOffset
+        val top = centerY - eggHeight / 2f
+        val bottom = centerY + eggHeight / 2f
         val rect = RectF(x - eggWidth / 2f, top, x + eggWidth / 2f, bottom)
 
-        canvas.drawOval(rect, corePaint)
-        ringPaint.color = accent
+        pinPaint.color = eggShellColor
+        canvas.drawOval(rect, pinPaint)
         ringPaint.strokeWidth = 4.5f * density
         canvas.drawOval(rect, ringPaint)
-        ringPaint.color = Color.WHITE
 
-        pinPaint.color = accent
+        pinPaint.color = eggSpotColor
         canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 7.2f * density, pinPaint)
         canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 5.7f * density, pinPaint)
         canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 4.5f * density, pinPaint)
