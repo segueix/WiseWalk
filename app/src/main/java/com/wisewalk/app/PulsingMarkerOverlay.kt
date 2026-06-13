@@ -43,8 +43,8 @@ class PulsingMarkerOverlay(
     private val eggShellColor = Color.parseColor("#ffb300")
     private val eggSpotColor = Color.parseColor("#ff5252")
 
-    // Fixed central dot with diameter equal to twice the route line width.
-    private val dotRadiusDp = 7f
+    // Fixed central dot with a diameter equal to three times the route line width.
+    private val dotRadiusDp = 10.5f
     private val maxRippleRadiusDp = 66f
     private val rippleCount = 3
     private val dropHeightDp = 42f
