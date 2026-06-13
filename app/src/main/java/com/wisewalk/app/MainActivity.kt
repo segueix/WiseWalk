@@ -90,6 +90,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var hasBearingFix: Boolean = false
     private var isProgrammaticMapMove: Boolean = false
     private var isPickerModeActive: Boolean = false
+    /** Map background darkness, 0..100. 50 = neutral, >50 darker, <50 brighter. */
+    private var mapDarknessProgress: Int = 50
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -324,6 +326,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             prefs.getBoolean("map_theme_dark", false),
             prefs.getString("map_theme_accent", "#3d7a6b") ?: "#3d7a6b"
         )
+        mapDarknessProgress = prefs.getInt("map_darkness", 50)
         mapView = binding.mapView
         mapView.setTileSource(if (MapStyle.isDark) CartoTileSources.DARK else CartoTileSources.LIGHT)
         applyMapTileTheme()
@@ -415,6 +418,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
+        val darknessSeekBar = findViewById<android.widget.SeekBar>(R.id.darknessSeekBar)
+        darknessSeekBar.progress = mapDarknessProgress
+        darknessSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                mapDarknessProgress = progress
+                applyMapTileTheme()
+                mapView.invalidate()
+            }
+
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
+                prefs.edit().putInt("map_darkness", mapDarknessProgress).apply()
+            }
+        })
+
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
                 if (!isProgrammaticMapMove) {
@@ -446,6 +465,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             // Show map and native picker UI, hide WebView so map receives touches
             mapView.visibility = View.VISIBLE
             findViewById<View>(R.id.mapControlsContainer).visibility = View.VISIBLE
+            findViewById<View>(R.id.darknessContainer).visibility = View.VISIBLE
             binding.webView.visibility = View.INVISIBLE
             crosshair.visibility = View.VISIBLE
             confirmBtn.visibility = View.VISIBLE
@@ -462,6 +482,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             confirmBtn.visibility = View.GONE
             mapView.visibility = View.GONE
             findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
+            findViewById<View>(R.id.darknessContainer).visibility = View.GONE
             mapView.mapOrientation = 0f
             destinationMarker?.stopAnimation()
             routePolyline?.stopAnimation()
@@ -494,9 +515,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * towards a softer mid gray so the map stays readable at night. */
     private fun applyMapTileTheme() {
         val tilesOverlay = mapView.overlayManager.tilesOverlay
+        // Slider-driven brightness: 50 = neutral, higher = darker, lower = brighter.
+        val d = (mapDarknessProgress - 50) / 50f
+        val brightness = (1f - d * 0.75f).coerceIn(0.15f, 1.85f)
         if (MapStyle.isDark) {
-            val scale = 1.15f
-            val lift = 52f
+            val scale = 1.15f * brightness
+            val lift = 52f * brightness
             tilesOverlay.setColorFilter(
                 ColorMatrixColorFilter(
                     ColorMatrix(
@@ -512,7 +536,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             tilesOverlay.loadingBackgroundColor = Color.parseColor("#454a4a")
             tilesOverlay.loadingLineColor = Color.parseColor("#535959")
         } else {
-            tilesOverlay.setColorFilter(null)
+            tilesOverlay.setColorFilter(
+                ColorMatrixColorFilter(
+                    ColorMatrix(
+                        floatArrayOf(
+                            brightness, 0f, 0f, 0f, 0f,
+                            0f, brightness, 0f, 0f, 0f,
+                            0f, 0f, brightness, 0f, 0f,
+                            0f, 0f, 0f, 1f, 0f
+                        )
+                    )
+                )
+            )
             tilesOverlay.loadingBackgroundColor = Color.parseColor("#e8e6e1")
             tilesOverlay.loadingLineColor = Color.parseColor("#d8d5cd")
         }
@@ -550,7 +585,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             style = Paint.Style.FILL
         }
         val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = MapStyle.accent
+            color = MapStyle.routeColor
             style = Paint.Style.FILL
         }
         val radius = sizePx / 2f - (2f * density)
@@ -571,7 +606,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             style = Paint.Style.FILL
         }
         val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = MapStyle.accent
+            color = MapStyle.routeColor
             style = Paint.Style.FILL
         }
         val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -744,9 +779,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 runOnUiThread {
                     try {
+                        // A fresh random color for the route line + location puck
+                        // on every new route.
+                        MapStyle.randomizeRouteColor()
                         mapView.overlays.clear()
                         copyrightOverlay?.let { mapView.overlays.add(it) }
                         if (::myLocationOverlay.isInitialized) {
+                            myLocationOverlay.setDirectionArrow(createLocationMarkerBitmap(), createDirectionArrowBitmap())
                             mapView.overlays.add(myLocationOverlay)
                         }
                         routePolyline?.stopAnimation()
@@ -1103,6 +1142,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 if (enabled) {
                     activity.mapView.visibility = View.VISIBLE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.VISIBLE
+                    activity.findViewById<View>(R.id.darknessContainer).visibility = View.VISIBLE
                     activity.mapView.onResume()
                     if (activity::myLocationOverlay.isInitialized) {
                         activity.myLocationOverlay.enableMyLocation()
@@ -1115,6 +1155,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 } else {
                     activity.mapView.visibility = View.GONE
                     activity.findViewById<View>(R.id.mapControlsContainer).visibility = View.GONE
+                    activity.findViewById<View>(R.id.darknessContainer).visibility = View.GONE
                     activity.mapView.mapOrientation = 0f
                     activity.destinationMarker?.stopAnimation()
                     activity.routePolyline?.stopAnimation()

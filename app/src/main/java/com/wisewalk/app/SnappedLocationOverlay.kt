@@ -104,7 +104,7 @@ class SnappedLocationOverlay : Overlay() {
         val y = screenPoint.y.toFloat()
         val density = mapView.context.resources.displayMetrics.density
         val radius = dotRadiusDp * density
-        val accent = MapStyle.accent
+        val accent = MapStyle.routeColor
 
         // Accuracy halo when off-route
         if (!isSnapped) {

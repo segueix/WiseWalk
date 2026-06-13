@@ -15,9 +15,31 @@ object MapStyle {
     var accent: Int = Color.parseColor("#3d7a6b")
         private set
 
+    /**
+     * Color used for the route line and the location puck. Re-rolled to a
+     * random vivid hue every time a new route is drawn (see
+     * [randomizeRouteColor]); defaults to [accent] before any route exists.
+     */
+    @Volatile
+    var routeColor: Int = accent
+
     /** Darker accent used as the route casing/border. */
     val accentDark: Int
         get() = blend(accent, Color.BLACK, 0.32f)
+
+    /** Darker variant of [routeColor] used as the route casing/border. */
+    val routeColorDark: Int
+        get() = blend(routeColor, Color.BLACK, 0.32f)
+
+    /** Picks a fresh, saturated random color for the route line + location puck. */
+    fun randomizeRouteColor() {
+        val hsv = floatArrayOf(
+            (Math.random() * 360.0).toFloat(),
+            0.68f,
+            if (isDark) 0.88f else 0.72f
+        )
+        routeColor = Color.HSVToColor(hsv)
+    }
 
     /** Already-walked part of the route. */
     val routeTraveled: Int
