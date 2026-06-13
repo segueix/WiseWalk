@@ -93,6 +93,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /** Map background darkness, 0..100. 50 = neutral, >50 darker, <50 brighter. */
     private var mapDarknessProgress: Int = 50
 
+    // --- Pokémon GO-style follow camera ---
+    /** Latest GPS fix, used to glide the camera back to the marker. */
+    private var lastUserLocation: GeoPoint? = null
+    private val cameraHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    /** After the user pans/zooms, this re-locks the camera onto the marker. */
+    private val resumeFollowRunnable = Runnable {
+        if (isWalkGpsModeActive) {
+            isUserInteractingWithMap = false
+            lastUserLocation?.let { followUserWithOffset(it, animate = true) }
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -201,6 +213,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     lastBearing = bearing
                     hasBearingFix = true
                     snappedLocationOverlay?.updateBearing(bearing)
+                    val geoPoint = GeoPoint(lat, lng)
+                    lastUserLocation = geoPoint
                     val loc = Location("fused")
                     loc.latitude = lat
                     loc.longitude = lng
@@ -210,12 +224,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         myLocationOverlay.onLocationChanged(loc, null)
                     }
                     if (isWalkGpsModeActive && !isUserInteractingWithMap) {
-                        val geoPoint = GeoPoint(lat, lng)
-                        isProgrammaticMapMove = true
-                        myLocationOverlay.enableFollowLocation()
-                        val targetZoom = mapView.zoomLevelDouble.coerceAtLeast(19.0)
-                        mapView.controller.animateTo(geoPoint, targetZoom, 300L)
-                        mapView.postDelayed({ isProgrammaticMapMove = false }, 400)
+                        followUserWithOffset(geoPoint, animate = true)
                     }
                 }
             }
@@ -257,7 +266,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (::myLocationOverlay.isInitialized) {
             myLocationOverlay.enableMyLocation()
             if (isWalkGpsModeActive) {
-                myLocationOverlay.enableFollowLocation()
+                myLocationOverlay.disableFollowLocation()
+                lastUserLocation?.let { loc ->
+                    mapView.post { if (isWalkGpsModeActive) followUserWithOffset(loc, animate = false) }
+                }
             }
         }
         destinationMarker?.startAnimation(mapView)
@@ -288,6 +300,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        cameraHandler.removeCallbacksAndMessages(null)
         locationReceiver?.let {
             try {
                 unregisterReceiver(it)
@@ -387,15 +400,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<ImageButton>(R.id.btn_center_me).setOnClickListener {
             try {
                 isUserInteractingWithMap = false
-                isProgrammaticMapMove = true
-                myLocationOverlay.enableFollowLocation()
-                val loc = myLocationOverlay.myLocation
+                cancelResumeFollow()
+                val loc = lastUserLocation ?: myLocationOverlay.myLocation
                 if (loc != null) {
-                    mapView.controller.animateTo(loc, 18.0, 500L)
+                    if (isWalkGpsModeActive) {
+                        followUserWithOffset(loc, animate = true)
+                    } else {
+                        isProgrammaticMapMove = true
+                        myLocationOverlay.enableFollowLocation()
+                        mapView.controller.animateTo(loc, 18.0, 500L)
+                        mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+                    }
                 } else {
                     getCurrentLocationAndCenter()
                 }
-                mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
             } catch (e: Exception) {
                 Log.w("WiseWalk", "Error centering map", e)
                 isProgrammaticMapMove = false
@@ -436,25 +454,72 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         mapView.addMapListener(object : MapListener {
             override fun onScroll(event: ScrollEvent?): Boolean {
-                if (!isProgrammaticMapMove) {
-                    myLocationOverlay.disableFollowLocation()
-                    if (isWalkGpsModeActive) {
-                        isUserInteractingWithMap = true
-                    }
-                }
+                onUserMapGesture()
                 return false
             }
 
             override fun onZoom(event: ZoomEvent?): Boolean {
-                if (!isProgrammaticMapMove) {
-                    myLocationOverlay.disableFollowLocation()
-                    if (isWalkGpsModeActive) {
-                        isUserInteractingWithMap = true
-                    }
-                }
+                onUserMapGesture()
                 return false
             }
         })
+    }
+
+    /** A user pan/zoom pauses the follow camera and arms the auto-return. */
+    private fun onUserMapGesture() {
+        if (isProgrammaticMapMove) return
+        myLocationOverlay.disableFollowLocation()
+        if (isWalkGpsModeActive) {
+            isUserInteractingWithMap = true
+            scheduleResumeFollow()
+        }
+    }
+
+    /**
+     * Pokémon GO / navigation-style follow camera: glides the map so the user
+     * marker sits a bit below the screen center, leaving more of the route
+     * visible ahead. Computed in screen space via the projection, so it stays
+     * correct even when the map is rotated by the compass.
+     */
+    private fun followUserWithOffset(target: GeoPoint, animate: Boolean) {
+        if (mapView.width <= 0 || mapView.height <= 0) return
+        try {
+            // We position the camera ourselves; make sure osmdroid's own
+            // exact-centering follow never fights this offset.
+            if (::myLocationOverlay.isInitialized) myLocationOverlay.disableFollowLocation()
+            isProgrammaticMapMove = true
+            val projection = mapView.projection
+            val userPx = projection.toPixels(target, null)
+            // Marker desired a bit below center -> map center sits above the user.
+            val offsetPx = (mapView.height * BELOW_CENTER_FRACTION).toInt()
+            val centerGeo = projection.fromPixels(userPx.x, userPx.y - offsetPx)
+            val targetZoom = mapView.zoomLevelDouble.coerceAtLeast(FOLLOW_ZOOM)
+            if (animate) {
+                mapView.controller.animateTo(centerGeo, targetZoom, CAMERA_ANIM_MS)
+            } else {
+                mapView.controller.setZoom(targetZoom)
+                mapView.controller.setCenter(centerGeo)
+            }
+            cameraHandler.removeCallbacks(clearProgrammaticMove)
+            cameraHandler.postDelayed(clearProgrammaticMove, CAMERA_ANIM_MS + 120)
+        } catch (e: Exception) {
+            Log.w("WiseWalk", "Error following user location", e)
+            isProgrammaticMapMove = false
+        }
+    }
+
+    private val clearProgrammaticMove = Runnable { isProgrammaticMapMove = false }
+
+    /** Cancels any pending auto-return-to-marker glide. */
+    private fun cancelResumeFollow() {
+        cameraHandler.removeCallbacks(resumeFollowRunnable)
+    }
+
+    /** (Re)arms the auto-return so the camera locks back on the marker after
+     *  the user finishes looking around or zooming. */
+    private fun scheduleResumeFollow() {
+        cameraHandler.removeCallbacks(resumeFollowRunnable)
+        cameraHandler.postDelayed(resumeFollowRunnable, AUTO_RESUME_DELAY_MS)
     }
 
     private fun setPickerMode(enabled: Boolean) {
@@ -642,10 +707,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
                 location?.let {
                     val geoPoint = GeoPoint(it.latitude, it.longitude)
-                    isProgrammaticMapMove = true
-                    myLocationOverlay.enableFollowLocation()
-                    mapView.controller.animateTo(geoPoint, 18.0, 500L)
-                    mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+                    lastUserLocation = geoPoint
+                    if (isWalkGpsModeActive) {
+                        followUserWithOffset(geoPoint, animate = true)
+                    } else {
+                        isProgrammaticMapMove = true
+                        myLocationOverlay.enableFollowLocation()
+                        mapView.controller.animateTo(geoPoint, 18.0, 500L)
+                        mapView.postDelayed({ isProgrammaticMapMove = false }, 600)
+                    }
                     sendLocationToWeb(it.latitude, it.longitude)
                 }
             }
@@ -1010,6 +1080,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         private const val PERMISSIONS_REQUEST = 2001
         private const val LOCATION_PERMISSION_REQUEST = 2002
+        /** How far below screen center the marker sits (fraction of height). */
+        private const val BELOW_CENTER_FRACTION = 0.14f
+        /** Minimum zoom kept while following during a walk. */
+        private const val FOLLOW_ZOOM = 19.0
+        /** Smooth glide duration for the follow camera. */
+        private const val CAMERA_ANIM_MS = 600L
+        /** Idle time after a pan/zoom before the camera returns to the marker. */
+        private const val AUTO_RESUME_DELAY_MS = 3500L
     }
 
     class WiseWalkBridge(private val activity: MainActivity, private val webView: WebView) {
@@ -1059,7 +1137,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 try {
                     activity.isWalkGpsModeActive = true
                     activity.isUserInteractingWithMap = false
-                    activity.myLocationOverlay.enableFollowLocation()
+                    activity.cancelResumeFollow()
+                    // We drive the camera ourselves (marker below center), so keep
+                    // osmdroid's own exact-centering follow disabled.
+                    activity.myLocationOverlay.disableFollowLocation()
+                    activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
                     if (activity.isCompassEnabled) {
                         activity.rotationSensor?.let {
                             activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
@@ -1084,6 +1166,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         fun stopWalkLocationUpdates() {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
+                activity.isUserInteractingWithMap = false
+                activity.cancelResumeFollow()
                 activity.sensorManager.unregisterListener(activity)
                 activity.mapView.mapOrientation = 0f
                 try {
@@ -1149,7 +1233,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     activity.mapView.onResume()
                     if (activity::myLocationOverlay.isInitialized) {
                         activity.myLocationOverlay.enableMyLocation()
-                        activity.myLocationOverlay.enableFollowLocation()
+                        // During a walk we drive the camera ourselves (marker below
+                        // center); otherwise let osmdroid center exactly.
+                        if (activity.isWalkGpsModeActive) {
+                            activity.myLocationOverlay.disableFollowLocation()
+                            activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
+                        } else {
+                            activity.myLocationOverlay.enableFollowLocation()
+                        }
                     }
                     activity.destinationMarker?.startAnimation(activity.mapView)
                     activity.routePolyline?.startAnimation(activity.mapView)
