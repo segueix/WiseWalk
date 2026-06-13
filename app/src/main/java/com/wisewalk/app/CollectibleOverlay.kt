@@ -71,8 +71,8 @@ class CollectibleOverlay : Overlay() {
         style = Paint.Style.FILL
     }
 
-    private val badgeRadiusDp = 11f
-    private val bobAmplitudeDp = 3f
+    private val badgeRadiusDp = 22f
+    private val bobAmplitudeDp = 6f
 
     private var bobPhase = 0f
     private var mapViewRef: WeakReference<MapView>? = null

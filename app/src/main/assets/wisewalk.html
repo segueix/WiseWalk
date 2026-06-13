@@ -971,18 +971,37 @@
     }
 
     /* ==== Activitat diària del servei natiu (passos, distància) ==== */
+    /* Distància diària reportada pel comptador de passos natiu (es reinicia
+       cada dia). La supervivència de la mascota es basa en aquesta distància. */
+    let nativeDailyKm=0;
+
     function renderDailyStats(stats){
       if(!stats)return;
       const steps=document.getElementById('day-steps');
       const dist=document.getElementById('day-distance');
       const mins=document.getElementById('day-minutes');
       if(steps&&typeof stats.steps!=='undefined')steps.textContent=Number(stats.steps).toLocaleString('ca');
-      if(dist&&typeof stats.distanceKm!=='undefined')dist.textContent=`${formatDecimal(Number(stats.distanceKm).toFixed(1))} km`;
+      if(dist&&typeof stats.distanceKm!=='undefined'){
+        nativeDailyKm=Number(stats.distanceKm)||0;
+        dist.textContent=`${formatDecimal(Number(stats.distanceKm).toFixed(1))} km`;
+      }
       if(mins&&typeof stats.walkingMin!=='undefined')mins.textContent=`${stats.walkingMin} min`;
+    }
+
+    /* Km caminats avui: el màxim entre la distància del servei natiu i la suma
+       de les caminades reclamades avui (així funciona encara que el comptador
+       de passos no estigui disponible). */
+    function getTodayWalkedKm(){
+      const today=getTodayIsoDate();
+      let claimed=0;
+      try{getActivityLog().forEach(e=>{if(e.date===today)claimed+=e.distanceKm||0;});}catch(_){}
+      return Math.max(nativeDailyKm||0,claimed);
     }
 
     window.wiseWalkOnStatsUpdate=function(stats){
       try{renderDailyStats(stats);}catch(_){}
+      /* Acredita la distància nova a la mascota en temps real */
+      try{updatePetUi();}catch(_){}
     };
 
     /* Pinta l'estat persistit i engega el servei de passos en segon pla */
@@ -1021,7 +1040,15 @@
     const PET_MIN_STAT=-50;
     const PET_MAX_DECAY_DAYS=7;
     const PET_AWAY_AFTER_MS=2*86400000;
-    const PET_WALK_RECOVERY=8;
+    /* Objectiu diari de distància: cal caminar entre 4 i 6 km cada dia perquè
+       la mascota sobrevisqui. Per sota de ~4 km els indicadors baixen més del
+       que es recupera; a 6 km s'obté la recuperació diària completa (no compta
+       caminar més de 6 km). Calibrat perquè el punt d'equilibri (recuperació =
+       decaïment diari) caigui dins la franja 4-6 km. */
+    const PET_DAILY_GOAL_MIN_KM=4;
+    const PET_DAILY_GOAL_FULL_KM=6;
+    const PET_DAILY_HUNGER_RECOVERY=22;
+    const PET_DAILY_HAPPY_RECOVERY=15;
 
     const PET_SPRITES={
       egg:[
@@ -1075,19 +1102,50 @@
       const pet=getPet();
       if(!pet)return null;
       const now=Date.now();
+      const today=getTodayIsoDate();
+      let changed=false;
+
+      /* 1) Decaïment per temps: la mascota sempre té més gana a mesura que
+            passa el temps, caminis o no. */
       const elapsedDays=Math.min(PET_MAX_DECAY_DAYS,(now-(pet.lastTickAt||now))/86400000);
       if(elapsedDays>0.01){
         pet.hunger=Math.max(PET_MIN_STAT,Math.round(pet.hunger-elapsedDays*PET_HUNGER_DECAY_PER_DAY));
         pet.happiness=Math.max(PET_MIN_STAT,Math.round(pet.happiness-elapsedDays*PET_HAPPY_DECAY_PER_DAY));
         pet.lastTickAt=now;
-        if(pet.hunger<=PET_MIN_STAT){
-          if(!pet.hungerZeroSince)pet.hungerZeroSince=now;
-          else if(now-pet.hungerZeroSince>PET_AWAY_AFTER_MS)pet.away=true;
-        }else{
-          pet.hungerZeroSince=null;
-        }
-        savePet(pet);
+        changed=true;
       }
+
+      /* 2) Recuperació diària per caminar: només caminar 4-6 km/dia manté viva
+            la mascota. El crèdit és proporcional a la distància del dia, limitat
+            a l'objectiu complet (6 km), i només compta la part nova caminada
+            (evita doble recompensa). En canviar de dia es reinicia el crèdit. */
+      if(pet.walkDayKey!==today){
+        pet.walkDayKey=today;
+        pet.walkCreditedKm=0;
+        changed=true;
+      }
+      const walkedKm=Math.min(getTodayWalkedKm(),PET_DAILY_GOAL_FULL_KM);
+      const newKm=walkedKm-(pet.walkCreditedKm||0);
+      if(newKm>0.001){
+        const frac=newKm/PET_DAILY_GOAL_FULL_KM;
+        pet.hunger=Math.min(100,Math.round(pet.hunger+frac*PET_DAILY_HUNGER_RECOVERY));
+        pet.happiness=Math.min(100,Math.round(pet.happiness+frac*PET_DAILY_HAPPY_RECOVERY));
+        pet.walkCreditedKm=walkedKm;
+        changed=true;
+      }
+
+      /* 3) Inanició: si la gana toca fons massa temps, la mascota se'n va. */
+      const prevZero=pet.hungerZeroSince||null;
+      const prevAway=!!pet.away;
+      if(pet.hunger<=PET_MIN_STAT){
+        if(!pet.hungerZeroSince)pet.hungerZeroSince=now;
+        else if(now-pet.hungerZeroSince>PET_AWAY_AFTER_MS)pet.away=true;
+      }else{
+        pet.hungerZeroSince=null;
+      }
+      if((pet.hungerZeroSince||null)!==prevZero||!!pet.away!==prevAway)changed=true;
+
+      if(changed)savePet(pet);
       return pet;
     }
 
@@ -1112,11 +1170,15 @@
     function petStatusMessage(pet){
       if(pet.away)return `${pet.name} se n'ha anat d'excursió. Completa una caminada perquè torni!`;
       const stage=getPetStage(pet);
-      if(stage==='egg')return 'L\'ou s\'està incubant. Camina per fer-lo eclosionar!';
-      if(pet.hunger<0||pet.happiness<0)return `${pet.name} està en números vermells! Camina més i recull elements per recuperar-lo.`;
+      const walkedKm=getTodayWalkedKm();
+      const remainKm=Math.max(0,PET_DAILY_GOAL_MIN_KM-walkedKm);
+      const goalTxt=`Avui: ${formatDecimal(walkedKm.toFixed(1))}/${PET_DAILY_GOAL_MIN_KM}-${PET_DAILY_GOAL_FULL_KM} km`;
+      if(stage==='egg')return `L'ou s'està incubant. Camina ${PET_DAILY_GOAL_MIN_KM}-${PET_DAILY_GOAL_FULL_KM} km al dia per fer-lo eclosionar! (${goalTxt})`;
+      if(pet.hunger<0||pet.happiness<0)return `${pet.name} està en números vermells! Camina ${PET_DAILY_GOAL_MIN_KM}-${PET_DAILY_GOAL_FULL_KM} km avui per recuperar-lo. (${goalTxt})`;
+      if(remainKm>0.05)return `${pet.name} et necessita: et falten ${formatDecimal(remainKm.toFixed(1))} km per arribar a l'objectiu diari. (${goalTxt})`;
       if(pet.hunger<30)return `${pet.name} té gana. Surt a caminar per trobar menjar!`;
       if(pet.happiness<30)return `${pet.name} s'avorreix. Una caminada l'animarà!`;
-      return `${pet.name} està content de veure't!`;
+      return `${pet.name} està content: avui ja has caminat prou! (${goalTxt})`;
     }
 
     let tamaMsgTimer=null;
@@ -1259,12 +1321,11 @@
         pet.happiness=Math.max(pet.happiness,50);
         savePet(pet);
         setTamaMessage(`${pet.name} ha tornat de l'excursió amb tu!`);
-      }else{
-        /* Caminar recupera directament part dels números vermells */
-        pet.hunger=Math.min(100,pet.hunger+PET_WALK_RECOVERY);
-        pet.happiness=Math.min(100,pet.happiness+PET_WALK_RECOVERY);
-        savePet(pet);
       }
+      /* La recuperació de gana/felicitat ve de la distància diària caminada
+         (la caminada reclamada ja s'ha sumat al registre d'activitat): es
+         comptabilitza a applyPetDecay via updatePetUi(). Aquí només donem la
+         recompensa d'XP i d'element. */
       addPetXp(10);
       const bonusType=pickWeightedItemType();
       addItem(bonusType,1);

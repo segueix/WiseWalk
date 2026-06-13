@@ -142,9 +142,9 @@ class ArrowRouteOverlay : Overlay() {
         val projection = mapView.projection
         val density = mapView.context.resources.displayMetrics.density
 
-        linePaint.color = MapStyle.accent
+        linePaint.color = MapStyle.routeColor
         linePaint.strokeWidth = lineWidthDp * density
-        casingPaint.color = MapStyle.accentDark
+        casingPaint.color = MapStyle.routeColorDark
         casingPaint.strokeWidth = casingWidthDp * density
         traveledPaint.color = MapStyle.routeTraveled
         traveledPaint.strokeWidth = lineWidthDp * density
