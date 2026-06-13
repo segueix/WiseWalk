@@ -13,12 +13,9 @@ import org.osmdroid.views.overlay.Overlay
 import java.lang.ref.WeakReference
 
 /**
- * Destination marker: an accent-colored map pin with a white core, soft
- * ground shadow, expanding ripple rings and a Pokémon GO-style drop-in
- * bounce when it first appears.
- * With [markerStyle] = "egg" it renders a golden mystery egg centered on the
- * destination point instead of the pin (used until the user adopts the
- * Tamagotchi pet).
+ * Destination marker: a fixed endpoint dot with expanding ripple rings.
+ * With [markerStyle] = "egg" it also renders a golden mystery egg above the
+ * destination point (used until the user adopts the Tamagotchi pet).
  */
 class PulsingMarkerOverlay(
     private var position: GeoPoint
@@ -37,15 +34,6 @@ class PulsingMarkerOverlay(
         style = Paint.Style.STROKE
     }
 
-    /** Thin defining edge around the solid destination dot. */
-    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-    }
-
-    private val groundShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(55, 0, 0, 0)
-        style = Paint.Style.FILL
-    }
 
     private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -55,11 +43,8 @@ class PulsingMarkerOverlay(
     private val eggShellColor = Color.parseColor("#ffb300")
     private val eggSpotColor = Color.parseColor("#ff5252")
 
-    // Big, solid destination dot so the end of the route is unmistakable.
-    // Roughly double the route line width (the path line is ~7-11dp wide in
-    // ArrowRouteOverlay), with concentric rings rippling outwards.
-    private val dotRadiusDp = 18f
-    private val outlineWidthDp = 2.5f
+    // Fixed central dot with diameter equal to twice the route line width.
+    private val dotRadiusDp = 7f
     private val maxRippleRadiusDp = 66f
     private val rippleCount = 3
     private val dropHeightDp = 42f
@@ -137,36 +122,20 @@ class PulsingMarkerOverlay(
             canvas.drawCircle(x, y, radius, ripplePaint)
         }
 
-        // Ground shadow grows as the dot lands
-        val shadowRadius = dotRadius * 0.55f * dropProgress.coerceIn(0f, 1f)
-        if (shadowRadius > 0f) {
-            canvas.drawOval(
-                RectF(x - shadowRadius, y - shadowRadius * 0.38f, x + shadowRadius, y + shadowRadius * 0.38f),
-                groundShadowPaint
-            )
-        }
-
-        // Drop-in offset (marker falls from above and bounces on landing)
-        val dropOffset = (1f - dropProgress) * dropHeightDp * density
+        // Fixed central circle at the route end, filled with the endpoint color.
+        pinPaint.color = color
+        canvas.drawCircle(x, y, dotRadius, pinPaint)
 
         if (markerStyle == "egg") {
+            // Drop-in offset (egg falls from above and bounces on landing).
+            val dropOffset = (1f - dropProgress) * dropHeightDp * density
             drawEgg(canvas, x, y, density, dropOffset)
-            return
         }
-
-        // Big solid destination dot filled with the (random) endpoint color,
-        // plus a thin darker outline so it stays crisp over any map color.
-        val centerY = y - dropOffset
-        pinPaint.color = color
-        canvas.drawCircle(x, centerY, dotRadius, pinPaint)
-        outlinePaint.color = MapStyle.endpointColorDark
-        outlinePaint.strokeWidth = outlineWidthDp * density
-        canvas.drawCircle(x, centerY, dotRadius - outlineWidthDp * density / 2f, outlinePaint)
     }
 
-    /** Mystery egg: golden oval with coral spots floating a bit above the
-     * arrival point (the point itself stays marked by the ripples/shadow). The
-     * leg is still claimed by reaching the real route end, not the egg. */
+    /** Mystery egg: golden oval with coral spots floating above the destination
+     * point. The leg is still claimed by reaching the real route end, not the
+     * egg. */
     private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, dropOffset: Float) {
         val eggWidth = 46f * density
         val eggHeight = 58f * density
