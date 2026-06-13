@@ -23,6 +23,14 @@ object MapStyle {
     @Volatile
     var routeColor: Int = accent
 
+    /**
+     * Color for the route's destination marker (round dot + concentric
+     * ripples). Re-rolled per route and kept visibly distinct from
+     * [routeColor] so the endpoint never blends into the line.
+     */
+    @Volatile
+    var endpointColor: Int = accent
+
     /** Darker accent used as the route casing/border. */
     val accentDark: Int
         get() = blend(accent, Color.BLACK, 0.32f)
@@ -31,14 +39,18 @@ object MapStyle {
     val routeColorDark: Int
         get() = blend(routeColor, Color.BLACK, 0.32f)
 
-    /** Picks a fresh, saturated random color for the route line + location puck. */
+    /** Picks fresh, saturated random colors for the route line and the
+     * destination marker, keeping the two hues clearly apart. */
     fun randomizeRouteColor() {
-        val hsv = floatArrayOf(
-            (Math.random() * 360.0).toFloat(),
-            0.68f,
-            if (isDark) 0.88f else 0.72f
+        val routeHue = (Math.random() * 360.0).toFloat()
+        routeColor = Color.HSVToColor(
+            floatArrayOf(routeHue, 0.68f, if (isDark) 0.88f else 0.72f)
         )
-        routeColor = Color.HSVToColor(hsv)
+        // Offset the endpoint hue by 90-270° so it never matches the line.
+        val endpointHue = ((routeHue + 90.0 + Math.random() * 180.0) % 360.0).toFloat()
+        endpointColor = Color.HSVToColor(
+            floatArrayOf(endpointHue, 0.72f, if (isDark) 0.92f else 0.70f)
+        )
     }
 
     /** Already-walked part of the route. */
