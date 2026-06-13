@@ -72,7 +72,7 @@
     <!-- Map background darkness slider (corner bar with a draggable knob) -->
     <LinearLayout
         android:id="@+id/darknessContainer"
-        android:layout_width="170dp"
+        android:layout_width="230dp"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:background="@drawable/btn_map_control"

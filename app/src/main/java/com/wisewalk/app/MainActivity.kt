@@ -517,10 +517,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val tilesOverlay = mapView.overlayManager.tilesOverlay
         // Slider-driven brightness: 50 = neutral, higher = darker, lower = brighter.
         val d = (mapDarknessProgress - 50) / 50f
-        val brightness = (1f - d * 0.75f).coerceIn(0.15f, 1.85f)
+        val brightness = (1f - d * 0.9f).coerceIn(0.12f, 2.1f)
         if (MapStyle.isDark) {
+            // Extra additive lift past neutral so dark mode can be made notably
+            // lighter at the bright end of the slider.
+            val extraLift = ((brightness - 1f) * 40f).coerceAtLeast(0f)
             val scale = 1.15f * brightness
-            val lift = 52f * brightness
+            val lift = 52f * brightness + extraLift
             tilesOverlay.setColorFilter(
                 ColorMatrixColorFilter(
                     ColorMatrix(
