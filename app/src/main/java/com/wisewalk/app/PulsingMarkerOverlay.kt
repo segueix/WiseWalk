@@ -37,9 +37,9 @@ class PulsingMarkerOverlay(
         style = Paint.Style.STROKE
     }
 
-    private val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
+    /** Thin defining edge around the solid destination dot. */
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
     }
 
     private val groundShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -55,11 +55,13 @@ class PulsingMarkerOverlay(
     private val eggShellColor = Color.parseColor("#ffb300")
     private val eggSpotColor = Color.parseColor("#ff5252")
 
-    // Endpoint dot sized to match the GPS location puck (SnappedLocationOverlay)
-    private val dotRadiusDp = 12f
-    private val dotRingWidthDp = 3f
-    private val maxRippleRadiusDp = 56f
-    private val rippleCount = 2
+    // Big, solid destination dot so the end of the route is unmistakable.
+    // Roughly double the route line width (the path line is ~7-11dp wide in
+    // ArrowRouteOverlay), with concentric rings rippling outwards.
+    private val dotRadiusDp = 18f
+    private val outlineWidthDp = 2.5f
+    private val maxRippleRadiusDp = 66f
+    private val rippleCount = 3
     private val dropHeightDp = 42f
 
     private var animProgress = 0f
@@ -123,14 +125,15 @@ class PulsingMarkerOverlay(
         val dotRadius = dotRadiusDp * density
         val maxRippleRadius = maxRippleRadiusDp * density
 
-        // Concentric ripple rings expanding from the point, in the endpoint color
+        // Concentric ripple rings rippling outwards from the dot edge,
+        // in the endpoint color
         ripplePaint.color = color
         for (i in 0 until rippleCount) {
             val offset = i.toFloat() / rippleCount
             val ripplePhase = (animProgress + offset) % 1f
-            val radius = dotRadius * 0.6f + (maxRippleRadius - dotRadius * 0.6f) * ripplePhase
-            ripplePaint.alpha = ((1f - ripplePhase) * 110).toInt().coerceIn(0, 255)
-            ripplePaint.strokeWidth = (2.5f - ripplePhase * 1.5f).coerceAtLeast(1f) * density
+            val radius = dotRadius + (maxRippleRadius - dotRadius) * ripplePhase
+            ripplePaint.alpha = ((1f - ripplePhase) * 130).toInt().coerceIn(0, 255)
+            ripplePaint.strokeWidth = (3f - ripplePhase * 1.8f).coerceAtLeast(1f) * density
             canvas.drawCircle(x, y, radius, ripplePaint)
         }
 
@@ -151,11 +154,14 @@ class PulsingMarkerOverlay(
             return
         }
 
-        // Round endpoint dot, same size as the GPS puck: white ring + colored core
+        // Big solid destination dot filled with the (random) endpoint color,
+        // plus a thin darker outline so it stays crisp over any map color.
         val centerY = y - dropOffset
-        canvas.drawCircle(x, centerY, dotRadius, corePaint)
         pinPaint.color = color
-        canvas.drawCircle(x, centerY, dotRadius - dotRingWidthDp * density, pinPaint)
+        canvas.drawCircle(x, centerY, dotRadius, pinPaint)
+        outlinePaint.color = MapStyle.endpointColorDark
+        outlinePaint.strokeWidth = outlineWidthDp * density
+        canvas.drawCircle(x, centerY, dotRadius - outlineWidthDp * density / 2f, outlinePaint)
     }
 
     /** Mystery egg: golden oval with coral spots floating a bit above the

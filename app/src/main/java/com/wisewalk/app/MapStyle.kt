@@ -39,6 +39,10 @@ object MapStyle {
     val routeColorDark: Int
         get() = blend(routeColor, Color.BLACK, 0.32f)
 
+    /** Darker variant of [endpointColor] for the destination dot's outline. */
+    val endpointColorDark: Int
+        get() = blend(endpointColor, Color.BLACK, 0.34f)
+
     /** Picks fresh, saturated random colors for the route line and the
      * destination marker, keeping the two hues clearly apart. */
     fun randomizeRouteColor() {
