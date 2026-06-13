@@ -900,6 +900,7 @@
 
         walkSession.destination={lat:newDestination.lat,lng:newDestination.lng};
         walkSession.activeLeg='outbound';
+        walkSession.arrivedLeg=null;
         walkSession.startedAt=Date.now();
         walkSession.accumulatedSeconds=totalAccum;
         walkSession.initialMeters=Math.round(outboundDistM);
@@ -1639,6 +1640,23 @@
       }
     }
 
+    /* Manté actiu el seguiment GPS perquè el marcador pugui arribar al punt
+       exacte final, sense reprendre el cronòmetre (ja congelat en arribar).
+       S'usa en restaurar la UI quan ja s'ha arribat però encara no s'ha reclamat. */
+    function ensureArrivalLocationUpdates(){
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.startWalkLocationUpdates){
+        WiseWalkAndroid.startWalkLocationUpdates();
+        return;
+      }
+      if(!('geolocation' in navigator))return;
+      if(walkWatchId!=null)return;
+      walkWatchId=navigator.geolocation.watchPosition(
+        pos=>{setRouteUserLocation(pos.coords.latitude,pos.coords.longitude);},
+        ()=>{},
+        {enableHighAccuracy:true,timeout:15000,maximumAge:1500}
+      );
+    }
+
     function showWalkInfoBox(show){
       if(walkInfoBox)walkInfoBox.classList.toggle('visible',!!show);
       if(walkExitBtn)walkExitBtn.classList.toggle('visible',!!show);
@@ -1677,16 +1695,18 @@
     function completeCurrentLegByArrival(){
       if(!walkSession||!walkSession.activeLeg)return;
       const leg=walkSession.activeLeg;
+      if(walkSession.arrivedLeg===leg)return; // l'arribada ja s'ha detectat
       const accum=walkSession.accumulatedSeconds||0;
       const elapsedSeconds=accum+Math.max(0,Math.floor((Date.now()-walkSession.startedAt)/1000));
+      /* Marquem l'arribada i congelem el cronòmetre, però NO aturem el seguiment
+         GPS ni buidem activeLeg: el marcador de localització ha de poder
+         continuar movent-se fins al punt exacte final mentre es mostra el botó
+         de reclamar. El tram es tanca definitivament en reclamar la recompensa. */
+      walkSession.arrivedLeg=leg;
+      stopWalkTimer();
       showWalkInfoBox(false);
       if(leg==='outbound'){
         walkSession.outboundElapsedSeconds=elapsedSeconds;
-        walkSession.activeLeg=null;
-        walkSession.startedAt=null;
-        walkSession.accumulatedSeconds=0;
-        stopWalkTimer();
-        stopWalkWatcher();
         saveWalkSession();
         setWalkButtonsVisibility({claimOutbound:true});
         setRouteInfoText(getPet()
@@ -1694,11 +1714,6 @@
           :'Has arribat! Un ou misteriós t\'hi esperava. Reclama\'l!');
       }else if(leg==='return'){
         walkSession.returnElapsedSeconds=elapsedSeconds;
-        walkSession.activeLeg=null;
-        walkSession.startedAt=null;
-        walkSession.accumulatedSeconds=0;
-        stopWalkTimer();
-        stopWalkWatcher();
         saveWalkSession();
         setWalkButtonsVisibility({claimReturn:true});
         setRouteInfoText('Has arribat al punt d\'origen! Prem "Reclamar tornada".');
@@ -1743,7 +1758,7 @@
         sendRouteToNative(returnCoordinates);
       }
       sendCollectiblesToNative(walkSession.collectibles||[]);
-      if(walkSession.activeLeg==='outbound'){
+      if(walkSession.activeLeg==='outbound'&&walkSession.arrivedLeg!=='outbound'){
         setWalkButtonsVisibility({});
         showWalkInfoBox(true);
         ensureWalkWatcher();
@@ -1751,13 +1766,16 @@
       }
       if(walkSession.outboundElapsedSeconds!=null&&walkSession.outboundClaimed!==true&&walkSession.returnElapsedSeconds==null){
         setWalkButtonsVisibility({claimOutbound:true});
+        /* Arribat però sense reclamar: mantenim el GPS perquè el marcador
+           pugui acabar d'arribar al punt exacte. */
+        if(walkSession.arrivedLeg==='outbound')ensureArrivalLocationUpdates();
         return;
       }
       if(walkSession.outboundClaimed===true&&walkSession.activeLeg!=='return'&&walkSession.returnElapsedSeconds==null){
         setWalkButtonsVisibility({returnOrigin:true});
         return;
       }
-      if(walkSession.activeLeg==='return'){
+      if(walkSession.activeLeg==='return'&&walkSession.arrivedLeg!=='return'){
         setWalkButtonsVisibility({});
         showWalkInfoBox(true);
         if(returnCoordinates&&returnCoordinates.length>=2){
@@ -1768,6 +1786,8 @@
       }
       if(walkSession.returnElapsedSeconds!=null&&walkSession.returnClaimed!==true){
         setWalkButtonsVisibility({claimReturn:true});
+        /* Arribat a l'origen però sense reclamar: mantenim el GPS actiu. */
+        if(walkSession.arrivedLeg==='return')ensureArrivalLocationUpdates();
         return;
       }
       setWalkButtonsVisibility({start:!!currentRoute});
@@ -2094,10 +2114,11 @@
 
           if(remaining<=ARRIVAL_THRESHOLD_M||getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
             completeCurrentLegByArrival();
-            return;
           }
 
-          /* Continuous line trim: interpolate from projected point */
+          /* Continuous line trim: interpolate from projected point. Continua
+             fins i tot després d'arribar perquè la línia es retalli i el
+             marcador segueixi avançant cap al punt exacte final. */
           const interpPoint=[proj.x,proj.y];
           const remainingCoords=[interpPoint,...coords.slice(segIdx+1)];
           if(remainingCoords.length>=2){
@@ -2107,11 +2128,14 @@
           sendSnappedPosition(lat,lng,false);
           if(getDistanceToTargetMeters(target)<=ARRIVAL_THRESHOLD_M){
             completeCurrentLegByArrival();
-            return;
           }
         }
 
-        renderActiveWalkStatus();
+        /* Un cop arribat, el cronòmetre està congelat: no reactivem la caixa
+           d'informació, però el marcador continua actualitzant-se. */
+        if(walkSession.arrivedLeg!==walkSession.activeLeg){
+          renderActiveWalkStatus();
+        }
         return;
       }
       if(pendingRouteGeneration){
@@ -2328,6 +2352,7 @@
         origin:{lat:routeOrigin.lat,lng:routeOrigin.lng},
         destination:{lat:currentRoute.end.lat,lng:currentRoute.end.lng},
         activeLeg:'outbound',
+        arrivedLeg:null,
         startedAt:Date.now(),
         accumulatedSeconds:0,
         outboundElapsedSeconds:null,
@@ -2347,6 +2372,14 @@
 
     function claimOutboundReward(){
       if(!walkSession||walkSession.outboundElapsedSeconds==null)return;
+      /* En arribar es manté el GPS perquè el marcador arribi al punt exacte;
+         ara que es reclama, tanquem el tram d'anada i aturem el seguiment. */
+      walkSession.activeLeg=null;
+      walkSession.arrivedLeg=null;
+      walkSession.startedAt=null;
+      walkSession.accumulatedSeconds=0;
+      stopWalkTimer();
+      stopWalkWatcher();
       const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
       const legKm=currentRouteMetrics?(currentRouteMetrics.outboundDistM||currentRouteMetrics.distanceKm*500)/1000:0;
       const elapsedH=walkSession.outboundElapsedSeconds/3600;
@@ -2380,6 +2413,7 @@
       }
       const initialM=returnCoordinates?calculatePolylineDistance(returnCoordinates):0;
       walkSession.activeLeg='return';
+      walkSession.arrivedLeg=null;
       walkSession.startedAt=Date.now();
       walkSession.accumulatedSeconds=0;
       walkSession.initialMeters=Math.round(initialM);

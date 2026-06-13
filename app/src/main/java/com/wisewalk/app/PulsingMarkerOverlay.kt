@@ -173,23 +173,27 @@ class PulsingMarkerOverlay(
         canvas.drawCircle(x, headCenterY, coreRadiusDp * density, corePaint)
     }
 
-    /** Mystery egg: golden oval with coral spots centered on the arrival point. */
+    /** Mystery egg: golden oval with coral spots floating a bit above the
+     * arrival point (the point itself stays marked by the ripples/shadow). The
+     * leg is still claimed by reaching the real route end, not the egg. */
     private fun drawEgg(canvas: Canvas, x: Float, y: Float, density: Float, dropOffset: Float) {
-        val eggWidth = 57f * density
-        val eggHeight = 72f * density
-        val centerY = y - dropOffset
+        val eggWidth = 46f * density
+        val eggHeight = 58f * density
+        // Lift the egg clear of the arrival point with a small gap below it.
+        val lift = eggHeight / 2f + 12f * density
+        val centerY = y - dropOffset - lift
         val top = centerY - eggHeight / 2f
         val bottom = centerY + eggHeight / 2f
         val rect = RectF(x - eggWidth / 2f, top, x + eggWidth / 2f, bottom)
 
         pinPaint.color = eggShellColor
         canvas.drawOval(rect, pinPaint)
-        ringPaint.strokeWidth = 4.5f * density
+        ringPaint.strokeWidth = 4f * density
         canvas.drawOval(rect, ringPaint)
 
         pinPaint.color = eggSpotColor
-        canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 7.2f * density, pinPaint)
-        canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 5.7f * density, pinPaint)
-        canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 4.5f * density, pinPaint)
+        canvas.drawCircle(x - eggWidth * 0.18f, top + eggHeight * 0.38f, 5.8f * density, pinPaint)
+        canvas.drawCircle(x + eggWidth * 0.16f, top + eggHeight * 0.56f, 4.6f * density, pinPaint)
+        canvas.drawCircle(x - eggWidth * 0.05f, top + eggHeight * 0.76f, 3.6f * density, pinPaint)
     }
 }
