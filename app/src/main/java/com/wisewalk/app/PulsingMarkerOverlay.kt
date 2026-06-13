@@ -105,14 +105,14 @@ class PulsingMarkerOverlay(
         val x = screenPoint.x.toFloat()
         val y = screenPoint.y.toFloat()
         val density = mapView.context.resources.displayMetrics.density
-        val color = MapStyle.endpointColor
+        val endpointColor = MapStyle.endpointColor
 
         val dotRadius = dotRadiusDp * density
         val maxRippleRadius = maxRippleRadiusDp * density
 
         // Concentric ripple rings rippling outwards from the dot edge,
         // in the endpoint color
-        ripplePaint.color = color
+        ripplePaint.color = endpointColor
         for (i in 0 until rippleCount) {
             val offset = i.toFloat() / rippleCount
             val ripplePhase = (animProgress + offset) % 1f
@@ -122,8 +122,8 @@ class PulsingMarkerOverlay(
             canvas.drawCircle(x, y, radius, ripplePaint)
         }
 
-        // Fixed central circle at the route end, filled with the endpoint color.
-        pinPaint.color = color
+        // Fixed central circle at the route end, drawn after ripples so it stays visible.
+        pinPaint.color = endpointColor
         canvas.drawCircle(x, y, dotRadius, pinPaint)
 
         if (markerStyle == "egg") {
