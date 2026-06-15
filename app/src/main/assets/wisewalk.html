@@ -565,6 +565,10 @@
         const data={};
         if(outboundCoordinates)data.outbound=outboundCoordinates;
         if(returnCoordinates)data.ret=returnCoordinates;
+        /* Les mètriques (km/desnivell de cada tram) també han de sobreviure a
+           un tancament de pantalla: si es perden, els km i les kcal de la
+           recompensa es calculen a zero en reclamar. */
+        if(currentRouteMetrics)data.metrics=currentRouteMetrics;
         localStorage.setItem('wisewalk-route-coords',JSON.stringify(data));
       }catch(_){}
     }
@@ -575,6 +579,7 @@
         if(!data)return;
         if(data.outbound&&!outboundCoordinates)outboundCoordinates=data.outbound;
         if(data.ret&&!returnCoordinates)returnCoordinates=data.ret;
+        if(data.metrics&&!currentRouteMetrics)currentRouteMetrics=data.metrics;
       }catch(_){}
     }
 
@@ -1908,19 +1913,28 @@
       setTamaMessage(`Benvingut, ${pet.name}!`,true);
     }
 
-    function getLegData(leg){
-      if(!currentRouteMetrics)return null;
-      let distKm;
-      if(leg==='outbound'&&currentRouteMetrics.outboundDistM){
-        distKm=currentRouteMetrics.outboundDistM/1000;
-      }else if(leg==='return'&&currentRouteMetrics.returnDistM){
-        distKm=currentRouteMetrics.returnDistM/1000;
-      }else{
-        distKm=currentRouteMetrics.distanceKm/2;
+    /* Distància (km) d'un tram. Si les mètriques no s'han pogut restaurar
+       després d'un tancament de pantalla, es recalcula a partir de la
+       polilínia desada perquè els km i les kcal mai es quedin a zero. */
+    function getLegDistanceKm(leg){
+      const m=currentRouteMetrics;
+      if(leg==='outbound'){
+        if(m&&m.outboundDistM)return m.outboundDistM/1000;
+        if(outboundCoordinates&&outboundCoordinates.length>1)return calculatePolylineDistance(outboundCoordinates)/1000;
+      }else if(leg==='return'){
+        if(m&&m.returnDistM)return m.returnDistM/1000;
+        if(returnCoordinates&&returnCoordinates.length>1)return calculatePolylineDistance(returnCoordinates)/1000;
       }
+      if(m&&m.distanceKm)return m.distanceKm/2;
+      return 0;
+    }
+
+    function getLegData(leg){
+      const distKm=getLegDistanceKm(leg);
+      if(!distKm||!isFinite(distKm))return null;
       return {
         distanceKm:distKm,
-        elevationM:currentRouteMetrics.elevationM/2,
+        elevationM:((currentRouteMetrics&&currentRouteMetrics.elevationM)||0)/2,
         legName:leg==='outbound'?'anada':'tornada'
       };
     }
@@ -2558,6 +2572,14 @@
       if(!route||typeof route.distance!=='number')throw new Error('Anella invàlida');
       const coords=route.geometry&&route.geometry.coordinates;
       if(!coords||coords.length<4)throw new Error('Geometria d\'anella invàlida');
+      /* Tanca l'anella exactament a l'origen. OSRM ajusta el primer i l'últim
+         punt (tots dos l'origen) a trams de carrer segons la direcció
+         d'aproximació, de manera que la geometria pot no tornar del tot al punt
+         de partida. Forcem que comenci i acabi al mateix lloc on és l'usuari
+         perquè la ruta anella acabi on comença. */
+      const originPt=[start.lng,start.lat];
+      coords[0]=[originPt[0],originPt[1]];
+      coords[coords.length-1]=[originPt[0],originPt[1]];
       const split=splitLoopAtFarthest(coords,start);
       const freshness=routeFreshnessPenalty(coords,mem);
       const backtrackM=computeBacktrackMeters(coords);
@@ -2958,7 +2980,7 @@
       stopWalkTimer();
       stopWalkWatcher();
       const burnedKcal=getLegKcalFromElapsed('outbound',walkSession.outboundElapsedSeconds);
-      const legKm=currentRouteMetrics?(currentRouteMetrics.outboundDistM||currentRouteMetrics.distanceKm*500)/1000:0;
+      const legKm=getLegDistanceKm('outbound');
       const elapsedH=walkSession.outboundElapsedSeconds/3600;
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
@@ -3010,7 +3032,7 @@
     function claimReturnReward(){
       if(!walkSession||walkSession.returnElapsedSeconds==null)return;
       const burnedKcal=getLegKcalFromElapsed('return',walkSession.returnElapsedSeconds);
-      const legKm=currentRouteMetrics?(currentRouteMetrics.returnDistM||currentRouteMetrics.distanceKm*500)/1000:0;
+      const legKm=getLegDistanceKm('return');
       const elapsedH=walkSession.returnElapsedSeconds/3600;
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
