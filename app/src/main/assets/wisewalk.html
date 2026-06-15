@@ -329,7 +329,7 @@
             </div>
           </div>
           <div class="distance-row" id="distance-row">
-            <span class="distance-label">Anada</span>
+            <span class="distance-label" id="distance-label">Anada</span>
             <div class="distance-chips" id="distance-chips">
               <button type="button" class="distance-chip" data-km="1">1 km</button>
               <button type="button" class="distance-chip" data-km="1.5">1,5 km</button>
@@ -2373,8 +2373,14 @@
       });
     }
     function renderDistanceChips(){
-      document.querySelectorAll('.distance-chip').forEach(chip=>{
-        chip.classList.toggle('active',parseFloat(chip.dataset.km)===selectedOutboundKm);
+      const loop=selectedRouteMode==='loop';
+      const label=document.getElementById('distance-label');
+      if(label)label.textContent=loop?'Volta':'Anada';
+      document.querySelectorAll('.distance-chip:not(.mode-chip)').forEach(chip=>{
+        const km=parseFloat(chip.dataset.km);
+        /* En anella el chip mostra la distància total (volta sencera) */
+        chip.textContent=`${formatDecimal(loop?km*2:km)} km`;
+        chip.classList.toggle('active',km===selectedOutboundKm);
       });
     }
 
@@ -3322,6 +3328,7 @@
       selectedRouteMode=chip.dataset.mode;
       localStorage.setItem('wisewalk-route-mode',selectedRouteMode);
       renderModeChips();
+      renderDistanceChips();
     });
     renderModeChips();
     document.addEventListener('visibilitychange',()=>{
