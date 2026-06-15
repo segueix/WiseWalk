@@ -318,9 +318,16 @@
         </div>
       </section>
       <section class="card" id="card-route">
-        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 destinacions en direccions diferents</div></div></div>
+        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 rutes en direccions diferents</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Genera una ruta sorpresa i surt a caminar.</div>
+          <div class="distance-row" id="mode-row">
+            <span class="distance-label">Tipus</span>
+            <div class="distance-chips" id="mode-chips">
+              <button type="button" class="distance-chip mode-chip" data-mode="loop">Anella</button>
+              <button type="button" class="distance-chip mode-chip" data-mode="outback">Anada i tornada</button>
+            </div>
+          </div>
           <div class="distance-row" id="distance-row">
             <span class="distance-label">Anada</span>
             <div class="distance-chips" id="distance-chips">
@@ -2355,6 +2362,16 @@
     /* Distància d'anada seleccionable (la tornada aproximadament la duplica) */
     let selectedOutboundKm=parseFloat(localStorage.getItem('wisewalk-outbound-km'))||1.5;
     function getTargetOutboundM(){return selectedOutboundKm*1000;}
+    /* Distància total de la caminada (anada+tornada o perímetre de l'anella) */
+    function getTargetTotalM(){return getTargetOutboundM()*2;}
+
+    /* Mode de ruta: 'loop' (anella, per defecte) o 'outback' (anada i tornada) */
+    let selectedRouteMode=localStorage.getItem('wisewalk-route-mode')||'loop';
+    function renderModeChips(){
+      document.querySelectorAll('.mode-chip').forEach(chip=>{
+        chip.classList.toggle('active',chip.dataset.mode===selectedRouteMode);
+      });
+    }
     function renderDistanceChips(){
       document.querySelectorAll('.distance-chip').forEach(chip=>{
         chip.classList.toggle('active',parseFloat(chip.dataset.km)===selectedOutboundKm);
@@ -2489,6 +2506,106 @@
 
       const chosen=selectSpreadFresh(pool,Math.min(ROUTE_OPTION_COUNT,pool.length));
       /* Stable display order: clockwise from north */
+      chosen.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
+      return chosen;
+    }
+
+    /* ── Rutes en anella (loop) ──
+       Distribueix N punts de pas al voltant de l'origen formant un polígon
+       irregular i deixa que OSRM els enllaci en un circuit tancat
+       (inici→p1→…→pN→inici). Cobreix totes les direccions per construcció i
+       no refà el camí, a diferència de l'anada-i-tornada. */
+    const LOOP_WAYPOINTS=5;
+
+    function buildLoopWaypoints(start,radiusM,base,sign){
+      const wps=[];
+      const step=(2*Math.PI)/LOOP_WAYPOINTS;
+      for(let i=0;i<LOOP_WAYPOINTS;i++){
+        const ang=base+sign*step*i+(Math.random()-0.5)*step*0.5;
+        const r=radiusM*(1+(Math.random()-0.5)*0.3);
+        wps.push(destinationFromBearing(start,r,ang));
+      }
+      return wps;
+    }
+
+    /* Divideix una anella pel punt més allunyat de l'origen en dos trams
+       (anada/tornada), perquè encaixi amb les fases de la caminada */
+    function splitLoopAtFarthest(coords,origin){
+      let k=0;
+      let maxD=-1;
+      for(let i=0;i<coords.length;i++){
+        const d=haversineDistance(origin.lat,origin.lng,coords[i][1],coords[i][0]);
+        if(d>maxD){maxD=d;k=i;}
+      }
+      k=Math.min(Math.max(k,1),coords.length-2);
+      return {
+        outbound:coords.slice(0,k+1),
+        return:coords.slice(k),
+        destination:{lat:coords[k][1],lng:coords[k][0]}
+      };
+    }
+
+    async function fetchLoopCandidate(start,radiusM,base,sign,targetTotalM,mem){
+      const wps=buildLoopWaypoints(start,radiusM,base,sign);
+      const data=await fetchOsrmRoute([start,...wps,start]);
+      const route=data.routes[0];
+      if(!route||typeof route.distance!=='number')throw new Error('Anella invàlida');
+      const coords=route.geometry&&route.geometry.coordinates;
+      if(!coords||coords.length<4)throw new Error('Geometria d\'anella invàlida');
+      const split=splitLoopAtFarthest(coords,start);
+      const freshness=routeFreshnessPenalty(coords,mem);
+      const backtrackM=computeBacktrackMeters(coords);
+      return {
+        loop:true,
+        data:{routes:[route]},
+        bearing:base,
+        coords,
+        outboundCoords:split.outbound,
+        returnCoords:split.return,
+        destination:split.destination,
+        distanceM:route.distance,
+        totalDistanceM:route.distance,
+        backtrackM,
+        freshness,
+        score:candidateScore(route.distance,freshness,backtrackM,targetTotalM)
+      };
+    }
+
+    async function generateLoopOptions(start){
+      const targetTotalM=getTargetTotalM();
+      const mem=loadRouteMemory();
+      /* Radi del cercle perquè el perímetre del polígon s'acosti a la
+         distància total demanada (corregit per la tortuositat urbana) */
+      const perimeter=targetTotalM/URBAN_TORTUOSITY_FACTOR;
+      const radius=perimeter/(LOOP_WAYPOINTS*2*Math.sin(Math.PI/LOOP_WAYPOINTS));
+      const base=nextRouteRotation();
+      const samples=Math.max(ROUTE_OPTION_COUNT*2,5);
+      const phase=(2*Math.PI)/samples;
+      const probes=[];
+      for(let i=0;i<samples;i++){
+        probes.push({
+          base:base+phase*i,
+          sign:Math.random()<0.5?1:-1,
+          radius:radius*(1+(Math.random()-0.5)*0.12)
+        });
+      }
+
+      const results=await Promise.allSettled(
+        probes.map(p=>fetchLoopCandidate(start,p.radius,p.base,p.sign,targetTotalM,mem))
+      );
+      const cands=[];
+      results.forEach((r,i)=>{
+        if(r.status==='fulfilled')cands.push(r.value);
+        else debugLog(`Anella ${i+1} fallida: ${(r.reason&&r.reason.message)||r.reason}`);
+      });
+
+      if(!cands.length){
+        throw new Error('No s\'ha pogut generar cap anella. Comprova la connexió i torna-ho a provar.');
+      }
+
+      const within=cands.filter(c=>Math.abs(c.totalDistanceM-targetTotalM)/1000<=DISTANCE_TOLERANCE_KM*1.5);
+      const pool=within.length>=ROUTE_OPTION_COUNT?within:cands;
+      const chosen=selectSpreadFresh(pool,Math.min(ROUTE_OPTION_COUNT,pool.length));
       chosen.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
       return chosen;
     }
@@ -2668,15 +2785,16 @@
       if(!box)return;
       box.innerHTML='';
       routeOptions.forEach((opt,idx)=>{
-        const totalKm=(opt.distanceM*2)/1000;
+        const totalKm=(opt.totalDistanceM||opt.distanceM*2)/1000;
         const est=calculateRouteCalories(getCalorieProfile(),totalKm,0,5.0);
+        const title=opt.loop?`Anella ${bearingLabel(opt.bearing)}`:`Cap ${bearingLabel(opt.bearing)}`;
         const btn=document.createElement('button');
         btn.type='button';
         btn.className='route-option'+(idx===selectedOptionIdx?' active':'');
         btn.innerHTML=`
           <span class="route-option-dir"><svg viewBox="0 0 24 24" style="transform:rotate(${Math.round(bearingToDegrees(opt.bearing))}deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
           <span>
-            <span class="route-option-title">Cap ${bearingLabel(opt.bearing)}</span>
+            <span class="route-option-title">${title}</span>
             <span class="route-option-meta">${formatDecimal(totalKm.toFixed(1))} km · ~${est.minutes} min · ~${est.kcal} kcal</span>
           </span>`;
         btn.addEventListener('click',()=>selectRouteOption(idx));
@@ -2700,19 +2818,27 @@
       setWalkButtonsVisibility({});
 
       try{
-        outboundCoordinates=opt.coords;
         currentRoute={start:opt.origin,end:opt.destination};
-
-        /* Return route and elevation fetched in parallel */
-        const [retCoords,totalPositiveGainM]=await Promise.all([
-          generateReturnRoute(opt.destination,opt.origin),
-          fetchElevationGain(opt.coords)
-        ]);
-        returnCoordinates=retCoords||[...opt.coords].reverse();
-
-        /* Recorda la ruta triada perquè les properes generacions evitin
-           aquests carrers durant uns dies */
-        rememberRouteCoords(outboundCoordinates,returnCoordinates);
+        let totalPositiveGainM;
+        if(opt.loop){
+          /* L'anella ja ve dividida en anada/tornada; no cal recalcular res */
+          outboundCoordinates=opt.outboundCoords;
+          returnCoordinates=opt.returnCoords;
+          totalPositiveGainM=await fetchElevationGain(opt.coords);
+          rememberRouteCoords(opt.coords);
+        }else{
+          outboundCoordinates=opt.coords;
+          /* Return route and elevation fetched in parallel */
+          const [retCoords,gain]=await Promise.all([
+            generateReturnRoute(opt.destination,opt.origin),
+            fetchElevationGain(opt.coords)
+          ]);
+          returnCoordinates=retCoords||[...opt.coords].reverse();
+          totalPositiveGainM=gain;
+          /* Recorda la ruta triada perquè les properes generacions evitin
+             aquests carrers durant uns dies */
+          rememberRouteCoords(outboundCoordinates,returnCoordinates);
+        }
 
         const outboundDistM=calculatePolylineDistance(outboundCoordinates);
         const returnDistM=calculatePolylineDistance(returnCoordinates);
@@ -2756,19 +2882,20 @@
         getLocation();
         return;
       }
-      setRouteInfoText('Buscant destinacions al teu voltant...');
+      const loopMode=selectedRouteMode==='loop';
+      setRouteInfoText(loopMode?'Dissenyant anelles al teu voltant...':'Buscant destinacions al teu voltant...');
       btnGenerateRoute.disabled=true;
       hideRouteOptions();
       routeDetails.style.display='none';
       setWalkButtonsVisibility({});
 
       try{
-        const options=await generateRouteOptions(origin);
+        const options=await(loopMode?generateLoopOptions(origin):generateRouteOptions(origin));
         options.forEach(o=>{o.origin=origin;});
         routeOptions=options;
         selectedOptionIdx=-1;
         renderRouteOptions();
-        setRouteInfoText(options.length>1?'Tria cap a on vols caminar:':'Només s\'ha trobat una destinació:');
+        setRouteInfoText(options.length>1?'Tria quina ruta vols fer:':'Només s\'ha trobat una ruta:');
       }catch(err){
         debugLog('Error a generateRandomRoute');
         debugLog((err&&err.stack)||err);
@@ -3189,6 +3316,14 @@
       renderDistanceChips();
     });
     renderDistanceChips();
+    document.getElementById('mode-chips').addEventListener('click',e=>{
+      const chip=e.target.closest('.mode-chip');
+      if(!chip)return;
+      selectedRouteMode=chip.dataset.mode;
+      localStorage.setItem('wisewalk-route-mode',selectedRouteMode);
+      renderModeChips();
+    });
+    renderModeChips();
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden){
         updatePetUi();
