@@ -560,11 +560,27 @@
     }
 
     /* ---- Coordinate persistence for screen-off survival ---- */
+    function rebuildRouteMetricsFromCoordinates(savedMetrics){
+      const outboundDistM=outboundCoordinates?calculatePolylineDistance(outboundCoordinates):0;
+      const returnDistM=returnCoordinates?calculatePolylineDistance(returnCoordinates):0;
+      const savedDistanceKm=Number(savedMetrics&&savedMetrics.distanceKm)||0;
+      const savedElevationM=Number(savedMetrics&&savedMetrics.elevationM)||0;
+      const distanceKm=(outboundDistM+returnDistM)>0?(outboundDistM+returnDistM)/1000:savedDistanceKm;
+      if(distanceKm<=0)return null;
+      return {
+        distanceKm,
+        elevationM:savedElevationM,
+        outboundDistM:outboundDistM||Number(savedMetrics&&savedMetrics.outboundDistM)||0,
+        returnDistM:returnDistM||Number(savedMetrics&&savedMetrics.returnDistM)||0
+      };
+    }
+
     function saveRouteCoordinates(){
       try{
         const data={};
         if(outboundCoordinates)data.outbound=outboundCoordinates;
         if(returnCoordinates)data.ret=returnCoordinates;
+        if(currentRouteMetrics)data.metrics=currentRouteMetrics;
         localStorage.setItem('wisewalk-route-coords',JSON.stringify(data));
       }catch(_){}
     }
@@ -575,6 +591,9 @@
         if(!data)return;
         if(data.outbound&&!outboundCoordinates)outboundCoordinates=data.outbound;
         if(data.ret&&!returnCoordinates)returnCoordinates=data.ret;
+        if(!currentRouteMetrics){
+          currentRouteMetrics=rebuildRouteMetricsFromCoordinates(data.metrics);
+        }
       }catch(_){}
     }
 
