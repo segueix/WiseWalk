@@ -131,6 +131,18 @@
     .egg-name-label{display:block;font-size:.8rem;color:var(--text-soft);margin-top:1.1rem;margin-bottom:.4rem}
     .egg-name-input{width:100%;padding:.85rem 1rem;border:2px solid var(--border);border-radius:14px;font-size:1rem;text-align:center;font-family:'Roboto Flex',sans-serif;background:var(--input-bg);color:var(--text)}
     .egg-name-input:focus{outline:none;border-color:var(--accent)}
+    .death-modal-canvas{width:88px;height:88px;image-rendering:pixelated;margin:0 auto .85rem;display:block;filter:grayscale(.85) brightness(.9);opacity:.85}
+    .config-divider{height:1px;background:var(--border);margin:1.5rem 0 1.1rem}
+    #screen-config .btn-small,#screen-cemetery .btn-small{margin-top:.55rem}
+    .cemetery-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.8rem;margin:.4rem 0 1rem}
+    .grave{display:flex}
+    .grave-stone{position:relative;width:100%;background:linear-gradient(180deg,var(--input-bg),var(--accent-light));border:2px solid var(--border);border-radius:18px 18px 8px 8px;padding:1.6rem .6rem .75rem;text-align:center;box-shadow:inset 0 -6px 12px rgba(0,0,0,.12),0 3px 8px var(--shadow)}
+    .grave-cross{position:absolute;top:.45rem;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:800;letter-spacing:.12em;color:var(--text-soft);opacity:.7}
+    .grave-canvas{width:52px;height:52px;image-rendering:pixelated;margin:.1rem auto .35rem;display:block;filter:grayscale(.7)}
+    .grave-name{font-weight:700;font-size:.92rem;line-height:1.2;word-break:break-word}
+    .grave-dates{font-size:.68rem;color:var(--text-soft);margin-top:.15rem}
+    .grave-stats{display:flex;justify-content:center;gap:.7rem;margin-top:.5rem;font-size:.7rem;color:var(--text-soft)}
+    .grave-stats b{color:var(--accent);font-size:.82rem}
     .pickup-banner{position:fixed;top:104px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--accent);color:#fff;padding:.55rem 1.15rem;border-radius:99px;font-size:.85rem;font-weight:600;z-index:1003;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;box-shadow:0 6px 18px rgba(0,0,0,.28);max-width:85vw;text-align:center}
     .pickup-banner.visible{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -360,6 +372,29 @@
           <button type="submit" class="btn">Desar canvis</button>
         </form>
         <button type="button" class="btn btn-secondary btn-small" id="btn-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Tornar</button>
+
+        <div class="config-divider"></div>
+        <div class="pet-section-title">Cementiri</div>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-open-cemetery"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v6h10V8a5 5 0 0 0-5-5z"/><path d="M9 8h6"/><path d="M12 6v4"/><path d="M5 20h14"/><path d="M7 14v6"/><path d="M17 14v6"/></svg> Veure el cementiri</button>
+
+        <div class="config-divider"></div>
+        <div class="pet-section-title">Dades de l'app</div>
+        <div class="address-status" style="margin-bottom:.6rem">Desa una còpia de seguretat de tot (perfil, activitat, mascota i cementiri) o restaura-la en un altre dispositiu.</div>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-export-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Exportar dades</button>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-import-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg> Importar dades</button>
+        <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+      </section>
+    </div>
+
+    <div id="screen-cemetery" class="screen">
+      <section class="card">
+        <div class="result-header">
+          <div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v6h10V8a5 5 0 0 0-5-5z"/><path d="M9 8h6"/><path d="M12 6v4"/><path d="M5 20h14"/><path d="M7 14v6"/><path d="M17 14v6"/></svg></div>
+          <div><div class="result-title">Cementiri</div><div class="result-subtitle">En memòria de les teves mascotes</div></div>
+        </div>
+        <div class="cemetery-grid" id="cemetery-grid"></div>
+        <div class="address-status" id="cemetery-empty">Encara no hi ha cap mascota al cementiri. Tingues cura de la teva sortint a caminar!</div>
+        <button type="button" class="btn btn-secondary btn-small" id="btn-cemetery-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Tornar</button>
       </section>
     </div>
 
@@ -415,6 +450,17 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="death-modal">
+    <div class="modal-card">
+      <canvas class="death-modal-canvas" id="death-modal-canvas" width="12" height="12"></canvas>
+      <h2><span id="death-name">La mascota</span> se n'ha anat 🕊️</h2>
+      <p class="subtitle">Fa massa temps que no obries l'app i no ha pogut sobreviure. Ara descansa al cementiri.</p>
+      <p class="subtitle" id="death-stats" style="margin-top:.5rem"></p>
+      <button class="btn" id="btn-view-cemetery">Veure el cementiri</button>
+      <button class="btn btn-secondary btn-small" id="btn-close-death" style="margin-top:.6rem">Tancar</button>
+    </div>
+  </div>
+
   <div id="debug-panel" class="debug-panel" aria-hidden="true">
     <div class="debug-title">Mode Debug</div>
     <div class="debug-actions">
@@ -435,6 +481,7 @@
     const screenMain=document.getElementById('screen-main');
     const screenConfig=document.getElementById('screen-config');
     const screenPet=document.getElementById('screen-pet');
+    const screenCemetery=document.getElementById('screen-cemetery');
     const formSetup=document.getElementById('form-setup');
     const formConfig=document.getElementById('form-config');
     const btnConfig=document.getElementById('btnConfig');
@@ -647,10 +694,11 @@
     }
 
     function showScreen(name){
-      [screenSetup,screenMain,screenConfig,screenPet].forEach(screen=>screen.classList.remove('active'));
+      [screenSetup,screenMain,screenConfig,screenPet,screenCemetery].forEach(screen=>screen&&screen.classList.remove('active'));
       if(name==='setup')screenSetup.classList.add('active');
       if(name==='main')screenMain.classList.add('active');
       if(name==='config')screenConfig.classList.add('active');
+      if(name==='cemetery'){screenCemetery.classList.add('active');renderCemetery();}
       if(name==='pet'){
         screenPet.classList.add('active');
         updatePetUi();
@@ -1041,6 +1089,9 @@
     const PET_MIN_STAT=-50;
     const PET_MAX_DECAY_DAYS=7;
     const PET_AWAY_AFTER_MS=2*86400000;
+    /* Mort per inactivitat: si fa 3 dies o més que no s'obre l'app, la mascota
+       mor i passa al cementiri. */
+    const PET_DEATH_AFTER_MS=3*86400000;
     /* Objectiu diari de distància: cal caminar entre 4 i 6 km cada dia perquè
        la mascota sobrevisqui. Per sota de ~4 km els indicadors baixen més del
        que es recupera; a 6 km s'obté la recuperació diària completa (no compta
@@ -1074,14 +1125,97 @@
       ]
     };
 
+    /* ---- Disseny únic autogenerat de cada mascota ----
+       Cada nou ou/mascota rep una paleta i un patró propis (color de cos,
+       color de detall, color d'ulls, patró de pell i color d'ou aleatori) a
+       partir d'una llavor, de manera que cap mascota s'assembla a una altra. */
+    function mulberry32(seed){
+      let a=seed>>>0;
+      return function(){
+        a|=0;a=a+0x6D2B79F5|0;
+        let t=Math.imul(a^a>>>15,1|a);
+        t=t+Math.imul(t^t>>>7,61|t)^t;
+        return ((t^t>>>14)>>>0)/4294967296;
+      };
+    }
+    function hslToHex(h,s,l){
+      s/=100;l/=100;
+      const k=n=>(n+h/30)%12;
+      const a=s*Math.min(l,1-l);
+      const f=n=>{const c=l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return Math.round(255*c).toString(16).padStart(2,'0');};
+      return `#${f(0)}${f(8)}${f(4)}`;
+    }
+    const PET_PATTERNS=['spots','stripes','belly','plain'];
+    const PET_TRAITS=['atrevit','tranquil','juganer','dormilega','curiós','valent','golafre','tímid','espavilat','somiador'];
+    function generatePetDesign(){
+      const seed=Math.floor(Math.random()*4294967295);
+      const rng=mulberry32(seed);
+      const hue=Math.floor(rng()*360);
+      const accentHue=(hue+120+Math.floor(rng()*120))%360;
+      const eggHue=Math.floor(rng()*360);
+      return {
+        seed,
+        bodyColor:hslToHex(hue,60+Math.floor(rng()*25),52+Math.floor(rng()*12)),
+        accentColor:hslToHex(accentHue,65+Math.floor(rng()*25),48+Math.floor(rng()*14)),
+        eyeColor:hslToHex((hue+200)%360,35,22),
+        pattern:PET_PATTERNS[Math.floor(rng()*PET_PATTERNS.length)],
+        eggColor:hslToHex(eggHue,68+Math.floor(rng()*22),58+Math.floor(rng()*12)),
+        eggSpotColor:hslToHex((eggHue+150)%360,72,55),
+        trait:PET_TRAITS[Math.floor(rng()*PET_TRAITS.length)]
+      };
+    }
+    const DEFAULT_PET_DESIGN={seed:1,bodyColor:'',accentColor:'',eyeColor:'#222',pattern:'plain',eggColor:'#ffb300',eggSpotColor:'#ff5252',trait:'misteriós'};
+    /* Migració: les mascotes creades abans del sistema de dissenys en reben un. */
+    function ensurePetDesign(pet){
+      if(pet&&!pet.design){pet.design=generatePetDesign();savePet(pet);}
+      return pet?pet.design:null;
+    }
+
+    /* Ou pendent: el disseny es decideix quan apareix l'ou al mapa, abans de
+       reclamar-lo, perquè l'ou que veus i la mascota que neix coincideixin. */
+    function getPendingEgg(){try{return JSON.parse(localStorage.getItem('wisewalk-pending-egg'))}catch(_){return null}}
+    function ensurePendingEgg(){
+      let egg=getPendingEgg();
+      if(!egg){egg={design:generatePetDesign(),createdAt:Date.now()};localStorage.setItem('wisewalk-pending-egg',JSON.stringify(egg));}
+      return egg;
+    }
+    function clearPendingEgg(){localStorage.removeItem('wisewalk-pending-egg')}
+
+    /* ---- Cementiri ---- */
+    function getCemetery(){try{return JSON.parse(localStorage.getItem('wisewalk-cemetery'))||[]}catch(_){return[]}}
+    function saveCemetery(list){localStorage.setItem('wisewalk-cemetery',JSON.stringify(list))}
+    function getPendingDeath(){try{return JSON.parse(localStorage.getItem('wisewalk-pending-death'))}catch(_){return null}}
+
     function getPet(){
       try{return JSON.parse(localStorage.getItem('wisewalk-pet'))}catch(_){return null}
     }
     function savePet(pet){localStorage.setItem('wisewalk-pet',JSON.stringify(pet))}
-    function createPet(name){
-      const pet={name:name||'Wisi',bornAt:Date.now(),xp:0,hunger:80,happiness:80,lastTickAt:Date.now(),away:false,hungerZeroSince:null};
+    function createPet(name,design){
+      const pet={name:name||'Wisi',bornAt:Date.now(),xp:0,hunger:80,happiness:80,lastTickAt:Date.now(),away:false,hungerZeroSince:null,kmWalked:0,kcalBurned:0,design:design||generatePetDesign()};
       savePet(pet);
       return pet;
+    }
+    /* La mascota mor si fa massa temps que no s'obre l'app: passa al cementiri
+       i s'esborra l'estat actual perquè la propera ruta porti un ou nou. */
+    function killPet(pet,when){
+      const tomb={
+        name:pet.name||'Wisi',
+        design:pet.design||generatePetDesign(),
+        stage:getPetStage(pet),
+        xp:pet.xp||0,
+        bornAt:pet.bornAt||when,
+        diedAt:when,
+        km:Math.round((pet.kmWalked||0)*100)/100,
+        kcal:Math.round(pet.kcalBurned||0),
+        trait:(pet.design&&pet.design.trait)||''
+      };
+      const list=getCemetery();
+      list.push(tomb);
+      saveCemetery(list);
+      localStorage.removeItem('wisewalk-pet');
+      localStorage.setItem('wisewalk-pending-death',JSON.stringify(tomb));
+      clearPendingEgg();
+      return tomb;
     }
 
     function getPetStage(pet){
@@ -1103,6 +1237,12 @@
       const pet=getPet();
       if(!pet)return null;
       const now=Date.now();
+      /* Mort per inactivitat: si fa 3 dies o més des de l'última vegada que es
+         va obrir l'app, la mascota mor i passa al cementiri. */
+      if(now-(pet.lastTickAt||now)>=PET_DEATH_AFTER_MS){
+        killPet(pet,now);
+        return null;
+      }
       const today=getTodayIsoDate();
       let changed=false;
 
@@ -1195,21 +1335,56 @@
       },long?6000:3000);
     }
 
-    function drawPetSprite(canvasId,frame){
-      const canvas=document.getElementById(canvasId);
-      const pet=getPet();
-      if(!canvas||!pet)return;
-      const key=pet.away?'away':getPetStage(pet);
+    /* Quines cel·les de cos es pinten amb el color de detall, segons el patró
+       únic de la mascota (taques, ratlles o panxa). L'ou es tracta a part. */
+    function isAccentCell(design,map,x,y){
+      switch(design.pattern){
+        case 'spots':{
+          const h=((x*73856093)^(y*19349663)^(design.seed||1))>>>0;
+          return h%5===0;
+        }
+        case 'stripes':
+          return (x+(design.seed||1))%3===0;
+        case 'belly':
+          return y>=map.length-4&&x>=3&&x<=map[y].length-4;
+        default:return false;
+      }
+    }
+
+    /* Renderitza qualsevol mascota (viva o del cementiri) amb el seu disseny. */
+    function drawPetSpriteOn(canvas,design,stage,frame,away){
+      if(!canvas)return;
+      const key=away?'away':stage;
       const frames=PET_SPRITES[key]||PET_SPRITES.egg;
       const map=frames[frame%frames.length];
       const ctx=canvas.getContext('2d');
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle=getComputedStyle(html).getPropertyValue('--accent').trim()||'#3d7a6b';
+      const accentCss=getComputedStyle(html).getPropertyValue('--accent').trim()||'#3d7a6b';
+      const d=design||DEFAULT_PET_DESIGN;
+      const isEgg=(key==='egg');
+      const body=isEgg?(d.eggColor||'#ffb300'):(d.bodyColor||accentCss);
+      const spot=isEgg?(d.eggSpotColor||'#ff5252'):(d.accentColor||accentCss);
       map.forEach((row,y)=>{
         for(let x=0;x<row.length;x++){
-          if(row[x]==='#')ctx.fillRect(x,y,1,1);
+          if(row[x]!=='#')continue;
+          let color=body;
+          if(isEgg){
+            const h=((x*73856093)^(y*19349663)^(d.seed||1))>>>0;
+            if(h%7===0)color=spot;
+          }else if(isAccentCell(d,map,x,y)){
+            color=spot;
+          }
+          ctx.fillStyle=color;
+          ctx.fillRect(x,y,1,1);
         }
       });
+    }
+
+    function drawPetSprite(canvasId,frame){
+      const canvas=document.getElementById(canvasId);
+      const pet=getPet();
+      if(!canvas||!pet)return;
+      drawPetSpriteOn(canvas,ensurePetDesign(pet),getPetStage(pet),frame,pet.away);
     }
 
     let tamaFrame=0;
@@ -1312,7 +1487,7 @@
 
     /* Cridat quan es reclama una anada o tornada: XP, element de regal
        garantit i retorn d'excursió */
-    function notifyPetWalkCompleted(){
+    function notifyPetWalkCompleted(legKm,kcal){
       const pet=getPet();
       if(!pet)return;
       if(pet.away){
@@ -1320,9 +1495,15 @@
         pet.hungerZeroSince=null;
         pet.hunger=Math.max(pet.hunger,40);
         pet.happiness=Math.max(pet.happiness,50);
-        savePet(pet);
         setTamaMessage(`${pet.name} ha tornat de l'excursió amb tu!`);
       }
+      /* Acumula els quilòmetres i les calories de tota la seva vida (es
+         mostraran a la làpida) i reinicia el rellotge de mort: caminar compta
+         com a usar l'app. */
+      pet.kmWalked=Math.round(((pet.kmWalked||0)+(legKm||0))*100)/100;
+      pet.kcalBurned=Math.round((pet.kcalBurned||0)+(kcal||0));
+      pet.lastTickAt=Date.now();
+      savePet(pet);
       /* La recuperació de gana/felicitat ve de la distància diària caminada
          (la caminada reclamada ja s'ha sumat al registre d'activitat): es
          comptabilitza a applyPetDecay via updatePetUi(). Aquí només donem la
@@ -1370,6 +1551,7 @@
 
     function updatePetUi(){
       const pet=applyPetDecay();
+      maybeShowDeathModal();
       const hasPet=!!pet;
       const btn=document.getElementById('btnPet');
       const card=document.getElementById('card-pet');
@@ -1435,6 +1617,115 @@
         drawPetSprite('pet-mini-canvas',0);
         drawPetSprite('tama-canvas',tamaFrame);
       }
+    }
+
+    /* ---- Cementiri i mort ---- */
+    function escapeHtml(s){
+      return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function formatGraveDate(ts){
+      try{
+        const d=new Date(ts);
+        const dd=String(d.getDate()).padStart(2,'0');
+        const mm=String(d.getMonth()+1).padStart(2,'0');
+        return `${dd}/${mm}/${d.getFullYear()}`;
+      }catch(_){return '—'}
+    }
+
+    function renderCemetery(){
+      const grid=document.getElementById('cemetery-grid');
+      const empty=document.getElementById('cemetery-empty');
+      if(!grid)return;
+      const list=getCemetery().slice().sort((a,b)=>(b.diedAt||0)-(a.diedAt||0));
+      grid.innerHTML='';
+      if(empty)empty.style.display=list.length?'none':'block';
+      list.forEach((t,i)=>{
+        const cid=`grave-canvas-${i}`;
+        const card=document.createElement('div');
+        card.className='grave';
+        card.innerHTML=
+          `<div class="grave-stone">`+
+            `<div class="grave-cross">RIP</div>`+
+            `<canvas id="${cid}" class="grave-canvas" width="12" height="12"></canvas>`+
+            `<div class="grave-name">${escapeHtml(t.name)}</div>`+
+            `<div class="grave-dates">${formatGraveDate(t.bornAt)} – ${formatGraveDate(t.diedAt)}</div>`+
+            `<div class="grave-stats">`+
+              `<span><b>${formatDecimal((t.km||0).toFixed(1))}</b> km</span>`+
+              `<span><b>${Math.round(t.kcal||0).toLocaleString('ca')}</b> kcal</span>`+
+            `</div>`+
+          `</div>`;
+        grid.appendChild(card);
+        drawPetSpriteOn(document.getElementById(cid),t.design,t.stage||'adult',0,false);
+      });
+    }
+
+    let deathModalShown=false;
+    function maybeShowDeathModal(){
+      const tomb=getPendingDeath();
+      if(!tomb||deathModalShown)return;
+      deathModalShown=true;
+      localStorage.removeItem('wisewalk-pending-death');
+      showDeathModal(tomb);
+      /* Ja no hi ha mascota: el pin torna a ser un ou (nou disseny) per a la
+         pròxima ruta. */
+      syncDestinationMarkerStyle();
+    }
+    function showDeathModal(tomb){
+      const modal=document.getElementById('death-modal');
+      if(!modal)return;
+      const nameEl=document.getElementById('death-name');
+      if(nameEl)nameEl.textContent=tomb.name||'La mascota';
+      const stats=document.getElementById('death-stats');
+      if(stats)stats.textContent=`${formatDecimal((tomb.km||0).toFixed(1))} km · ${Math.round(tomb.kcal||0).toLocaleString('ca')} kcal durant la seva vida.`;
+      drawPetSpriteOn(document.getElementById('death-modal-canvas'),tomb.design,tomb.stage||'adult',0,false);
+      modal.classList.add('visible');
+    }
+    function closeDeathModal(){
+      const modal=document.getElementById('death-modal');
+      if(modal)modal.classList.remove('visible');
+    }
+
+    /* ---- Exportar / importar totes les dades de l'app ---- */
+    function collectAppData(){
+      const data={};
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k&&k.indexOf('wisewalk-')===0)data[k]=localStorage.getItem(k);
+      }
+      return data;
+    }
+    function exportAllData(){
+      const payload=JSON.stringify({app:'WiseWalk',type:'wisewalk-backup',version:1,exportedAt:Date.now(),data:collectAppData()},null,2);
+      if(window.WiseWalkAndroid&&WiseWalkAndroid.exportAppData){
+        try{WiseWalkAndroid.exportAppData(payload);return;}catch(_){}
+      }
+      try{
+        const blob=new Blob([payload],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`wisewalk-backup-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }catch(err){
+        showPickupBanner('No s\'han pogut exportar les dades');
+      }
+    }
+    function importAllDataFromText(text){
+      let parsed;
+      try{parsed=JSON.parse(text);}catch(_){showPickupBanner('El fitxer no és vàlid');return;}
+      const data=(parsed&&typeof parsed.data==='object'&&parsed.data)?parsed.data:parsed;
+      if(!data||typeof data!=='object'){showPickupBanner('El fitxer no és vàlid');return;}
+      const keys=Object.keys(data).filter(k=>k.indexOf('wisewalk-')===0);
+      if(!keys.length){showPickupBanner('El fitxer no conté dades de WiseWalk');return;}
+      if(!window.confirm('Importar substituirà totes les dades actuals de WiseWalk. Vols continuar?'))return;
+      const existing=[];
+      for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.indexOf('wisewalk-')===0)existing.push(k);}
+      existing.forEach(k=>localStorage.removeItem(k));
+      keys.forEach(k=>{try{localStorage.setItem(k,String(data[k]));}catch(_){}});
+      location.reload();
     }
 
     /* ---- Col·leccionables a les rutes ---- */
@@ -2192,8 +2483,17 @@
     /* El pin de destinació es mostra com un ou misteriós fins que l'usuari
        adopta la mascota */
     function syncDestinationMarkerStyle(){
+      const pet=getPet();
       if(window.WiseWalkAndroid&&WiseWalkAndroid.setDestinationMarkerStyle){
-        try{WiseWalkAndroid.setDestinationMarkerStyle(getPet()?'flag':'egg');}catch(_){}
+        try{WiseWalkAndroid.setDestinationMarkerStyle(pet?'flag':'egg');}catch(_){}
+      }
+      /* Sense mascota: prepara un ou nou amb color aleatori i comunica'l al
+         mapa natiu perquè cada ou tingui un color únic. */
+      if(!pet){
+        const egg=ensurePendingEgg();
+        if(window.WiseWalkAndroid&&WiseWalkAndroid.setEggColors){
+          try{WiseWalkAndroid.setEggColors(egg.design.eggColor,egg.design.eggSpotColor);}catch(_){}
+        }
       }
     }
 
@@ -2387,8 +2687,12 @@
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
       const isFirstEgg=!getPet();
-      if(isFirstEgg)createPet('Wisi');
-      notifyPetWalkCompleted();
+      if(isFirstEgg){
+        const egg=getPendingEgg();
+        createPet('Wisi',egg?egg.design:generatePetDesign());
+        clearPendingEgg();
+      }
+      notifyPetWalkCompleted(legKm,burnedKcal);
       walkSession.outboundClaimed=true;
       saveWalkSession();
 
@@ -2434,7 +2738,7 @@
       const speedKmh=elapsedH>0?legKm/elapsedH:0;
       addBurnedCaloriesToToday(burnedKcal);
       addActivityEntry(legKm,burnedKcal);
-      notifyPetWalkCompleted();
+      notifyPetWalkCompleted(legKm,burnedKcal);
       walkSession.returnClaimed=true;
       saveWalkSession();
       setRouteInfoText(`Tornada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h.`);
@@ -2713,6 +3017,21 @@
       if(pet)setTamaMessage(`Menjar ${pet.hunger}/100 · Felicitat ${pet.happiness}/100 · ${pet.xp||0} XP`);
     });
     document.getElementById('btn-adopt-egg').addEventListener('click',adoptEgg);
+    document.getElementById('btn-open-cemetery').addEventListener('click',()=>showScreen('cemetery'));
+    document.getElementById('btn-cemetery-back').addEventListener('click',()=>showScreen('main'));
+    document.getElementById('btn-view-cemetery').addEventListener('click',()=>{closeDeathModal();showScreen('cemetery');});
+    document.getElementById('btn-close-death').addEventListener('click',closeDeathModal);
+    document.getElementById('btn-export-data').addEventListener('click',exportAllData);
+    document.getElementById('btn-import-data').addEventListener('click',()=>document.getElementById('import-file').click());
+    document.getElementById('import-file').addEventListener('change',e=>{
+      const file=e.target.files&&e.target.files[0];
+      if(!file)return;
+      const reader=new FileReader();
+      reader.onload=()=>importAllDataFromText(reader.result);
+      reader.onerror=()=>showPickupBanner('No s\'ha pogut llegir el fitxer');
+      reader.readAsText(file);
+      e.target.value='';
+    });
     document.getElementById('btn-fix-start').addEventListener('click',openLocationPicker);
     document.getElementById('btn-clear-start').addEventListener('click',()=>{
       saveHomeAddress(null);

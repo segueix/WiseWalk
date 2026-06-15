@@ -39,9 +39,10 @@ class PulsingMarkerOverlay(
         style = Paint.Style.STROKE
     }
 
-    /** Vivid shell and spot colors so the egg stands out against the map. */
-    private val eggShellColor = Color.parseColor("#ffb300")
-    private val eggSpotColor = Color.parseColor("#ff5252")
+    /** Vivid shell and spot colors so the egg stands out against the map.
+     *  Settable so each mystery egg can have its own randomly generated color. */
+    var eggShellColor = Color.parseColor("#ffb300")
+    var eggSpotColor = Color.parseColor("#ff5252")
 
     // Fixed central dot matches the visible colored core of the user location puck.
     private val dotRadiusDp = 9f

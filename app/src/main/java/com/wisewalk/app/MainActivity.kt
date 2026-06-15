@@ -33,7 +33,9 @@ import android.hardware.SensorManager
 import android.util.Log
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import androidx.activity.result.contract.ActivityResultContracts
 import android.webkit.WebSettings
 import android.view.View
 import android.widget.ImageButton
@@ -70,6 +72,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+    /** Pending WebView <input type="file"> callback (used by the data importer). */
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = fileChooserCallback
+        fileChooserCallback = null
+        callback?.onReceiveValue(
+            if (result.resultCode == RESULT_OK)
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            else null
+        )
+    }
     private var locationReceiver: BroadcastReceiver? = null
     private var statsReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
@@ -83,6 +98,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
     private var destinationMarkerStyle: String = "flag"
+    /** Randomly generated mystery-egg colors sent from the web layer. */
+    private var eggShellColor: Int = Color.parseColor("#ffb300")
+    private var eggSpotColor: Int = Color.parseColor("#ff5252")
     private var collectibleOverlay: CollectibleOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var copyrightOverlay: CopyrightOverlay? = null
@@ -94,14 +112,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var mapDarknessProgress: Int = 50
 
     // --- Pokémon GO-style follow camera ---
-    /** Latest GPS fix, used to glide the camera back to the marker. */
+    /** Latest raw GPS fix, used as a fallback target for the follow camera. */
     private var lastUserLocation: GeoPoint? = null
+    /** Latest position of the *visible* user marker during a walk (snapped onto
+     *  the route when close to it). The camera follows this so the dot the user
+     *  sees — not the raw GPS reading — stays at the lower-center of the screen. */
+    private var lastSnappedLocation: GeoPoint? = null
+    /** The point the follow camera should keep at the lower-center: the visible
+     *  (snapped) marker if we have one, otherwise the raw GPS fix. */
+    private fun cameraFollowTarget(): GeoPoint? = lastSnappedLocation ?: lastUserLocation
     private val cameraHandler = android.os.Handler(android.os.Looper.getMainLooper())
     /** After the user pans/zooms, this re-locks the camera onto the marker. */
     private val resumeFollowRunnable = Runnable {
         if (isWalkGpsModeActive) {
             isUserInteractingWithMap = false
-            lastUserLocation?.let { followUserWithOffset(it, animate = true) }
+            cameraFollowTarget()?.let { followUserWithOffset(it, animate = true) }
         }
     }
 
@@ -165,6 +190,27 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     requestLocationPermission()
                 }
             }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = filePathCallback
+                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                return try {
+                    fileChooserLauncher.launch(intent)
+                    true
+                } catch (e: ActivityNotFoundException) {
+                    fileChooserCallback = null
+                    Toast.makeText(this@MainActivity, "No hi ha cap selector de fitxers", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            }
         }
         // DEIXAR PASSAR ELS TOCS AL MAPA
         wv.setOnTouchListener { _, event ->
@@ -223,7 +269,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (::myLocationOverlay.isInitialized) {
                         myLocationOverlay.onLocationChanged(loc, null)
                     }
-                    if (isWalkGpsModeActive && !isUserInteractingWithMap) {
+                    // While navigating, the camera is driven by the snapped
+                    // marker position (see updateSnappedPosition). Only follow the
+                    // raw fix as a fallback before any snapped position arrives.
+                    if (isWalkGpsModeActive && !isUserInteractingWithMap && lastSnappedLocation == null) {
                         followUserWithOffset(geoPoint, animate = true)
                     }
                 }
@@ -267,7 +316,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             myLocationOverlay.enableMyLocation()
             if (isWalkGpsModeActive) {
                 myLocationOverlay.disableFollowLocation()
-                lastUserLocation?.let { loc ->
+                cameraFollowTarget()?.let { loc ->
                     mapView.post { if (isWalkGpsModeActive) followUserWithOffset(loc, animate = false) }
                 }
             }
@@ -401,7 +450,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             try {
                 isUserInteractingWithMap = false
                 cancelResumeFollow()
-                val loc = lastUserLocation ?: myLocationOverlay.myLocation
+                val loc = cameraFollowTarget() ?: myLocationOverlay.myLocation
                 if (loc != null) {
                     if (isWalkGpsModeActive) {
                         followUserWithOffset(loc, animate = true)
@@ -883,6 +932,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         destinationMarker?.stopAnimation()
                         val marker = PulsingMarkerOverlay(points.last())
                         marker.markerStyle = destinationMarkerStyle
+                        marker.eggShellColor = eggShellColor
+                        marker.eggSpotColor = eggSpotColor
                         destinationMarker = marker
                         mapView.overlays.add(marker)
                         marker.startAnimation(mapView)
@@ -1145,7 +1196,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     // We drive the camera ourselves (marker below center), so keep
                     // osmdroid's own exact-centering follow disabled.
                     activity.myLocationOverlay.disableFollowLocation()
-                    activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
+                    activity.cameraFollowTarget()?.let { activity.followUserWithOffset(it, animate = false) }
                     if (activity.isCompassEnabled) {
                         activity.rotationSensor?.let {
                             activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
@@ -1171,6 +1222,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
                 activity.isUserInteractingWithMap = false
+                activity.lastSnappedLocation = null
                 activity.cancelResumeFollow()
                 activity.sensorManager.unregisterListener(activity)
                 activity.mapView.mapOrientation = 0f
@@ -1209,6 +1261,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         activity.myLocationOverlay.isDrawAccuracyEnabled = true
                     }
                 }
+                // This is the position of the marker the user actually sees. Make
+                // the camera follow it so the user's dot — not the raw GPS point
+                // off to the side of the path — stays at the lower-center.
+                val displayed = GeoPoint(lat, lng)
+                activity.lastSnappedLocation = displayed
+                if (activity.isWalkGpsModeActive && !activity.isUserInteractingWithMap) {
+                    activity.followUserWithOffset(displayed, animate = true)
+                }
                 activity.mapView.invalidate()
             }
         }
@@ -1241,7 +1301,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         // center); otherwise let osmdroid center exactly.
                         if (activity.isWalkGpsModeActive) {
                             activity.myLocationOverlay.disableFollowLocation()
-                            activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
+                            activity.cameraFollowTarget()?.let { activity.followUserWithOffset(it, animate = false) }
                         } else {
                             activity.myLocationOverlay.enableFollowLocation()
                         }
@@ -1356,6 +1416,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         @JavascriptInterface
+        fun setEggColors(shellHex: String, spotHex: String) {
+            activity.runOnUiThread {
+                try {
+                    activity.eggShellColor = Color.parseColor(shellHex)
+                    activity.eggSpotColor = Color.parseColor(spotHex)
+                    activity.destinationMarker?.let {
+                        it.eggShellColor = activity.eggShellColor
+                        it.eggSpotColor = activity.eggSpotColor
+                        activity.mapView.invalidate()
+                    }
+                } catch (e: Exception) {
+                    Log.w("WiseWalk", "setEggColors: color invàlid", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun setMapTheme(isDark: Boolean, accentHex: String) {
             activity.runOnUiThread {
                 try {
@@ -1415,6 +1492,51 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     Log.e("WiseWalk", "Error exportant debug log", e)
                     activity.runOnUiThread {
                         Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        /** Saves the full app-data backup to a JSON file and offers it via the
+         *  Android share sheet (save to Drive, Files, send by email...). */
+        @JavascriptInterface
+        fun exportAppData(content: String) {
+            thread(name = "WiseWalkDataExport", start = true) {
+                try {
+                    val logsDir = File(activity.cacheDir, "logs")
+                    if (!logsDir.exists() && !logsDir.mkdirs()) {
+                        throw IllegalStateException("No s'ha pogut crear cacheDir/logs")
+                    }
+                    val fileName = "wisewalk-backup-${System.currentTimeMillis()}.json"
+                    val outFile = File(logsDir, fileName)
+                    outFile.writeText(content)
+                    val uri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        outFile
+                    )
+                    activity.runOnUiThread {
+                        try {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_SUBJECT, "Còpia de seguretat de WiseWalk")
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            activity.startActivity(Intent.createChooser(shareIntent, "Exportar dades de WiseWalk"))
+                            Toast.makeText(activity, "Dades exportades correctament", Toast.LENGTH_SHORT).show()
+                        } catch (e: ActivityNotFoundException) {
+                            Log.w("WiseWalk", "No s'ha trobat cap app per exportar les dades", e)
+                            Toast.makeText(activity, "No hi ha cap app compatible per exportar", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("WiseWalk", "Error exportant dades", e)
+                            Toast.makeText(activity, "No s'han pogut exportar les dades", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WiseWalk", "Error exportant dades", e)
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "No s'han pogut exportar les dades", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
