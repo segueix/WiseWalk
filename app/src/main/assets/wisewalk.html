@@ -318,11 +318,18 @@
         </div>
       </section>
       <section class="card" id="card-route">
-        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 destinacions en direccions diferents</div></div></div>
+        <div class="result-header"><div class="result-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div><div><div class="result-title">Caminada aleatòria</div><div class="result-subtitle">Tria entre 3 rutes en direccions diferents</div></div></div>
         <div class="route-container">
           <div class="route-info-text" id="route-info">Genera una ruta sorpresa i surt a caminar.</div>
+          <div class="distance-row" id="mode-row">
+            <span class="distance-label">Tipus</span>
+            <div class="distance-chips" id="mode-chips">
+              <button type="button" class="distance-chip mode-chip" data-mode="loop">Anella</button>
+              <button type="button" class="distance-chip mode-chip" data-mode="outback">Anada i tornada</button>
+            </div>
+          </div>
           <div class="distance-row" id="distance-row">
-            <span class="distance-label">Anada</span>
+            <span class="distance-label" id="distance-label">Anada</span>
             <div class="distance-chips" id="distance-chips">
               <button type="button" class="distance-chip" data-km="1">1 km</button>
               <button type="button" class="distance-chip" data-km="1.5">1,5 km</button>
@@ -797,6 +804,23 @@
       );
 
       return {lat:lat2*180/Math.PI,lng:normalizeLongitude(lon2*180/Math.PI)};
+    }
+
+    /* Rumb inicial (radians) del punt a cap al punt b, compatible amb
+       destinationFromBearing (0 = nord, en sentit horari) */
+    function bearingBetween(a,b){
+      const lat1=a.lat*Math.PI/180;
+      const lat2=b.lat*Math.PI/180;
+      const dLon=(b.lng-a.lng)*Math.PI/180;
+      const y=Math.sin(dLon)*Math.cos(lat2);
+      const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+      return Math.atan2(y,x);
+    }
+
+    /* Separació angular mínima (radians, 0..π) entre dos rumbs */
+    function angularGap(a,b){
+      let d=Math.abs(a-b)%(2*Math.PI);
+      return d>Math.PI?2*Math.PI-d:d;
     }
 
     function bearingToDegrees(bearing){
@@ -2123,13 +2147,16 @@
     /* Ruta OSRM per una llista de punts {lat,lng}. continue_straight impedeix
        girs de 180° als punts intermedis, així la ruta no entra en un tros de
        carrer per tornar enrere */
-    async function fetchOsrmRoute(points){
+    async function fetchOsrmRoute(points,opts){
       let lastError=null;
+      /* alternatives només té efecte en peticions de dos punts (sense punts
+         intermedis); OSRM l'ignora si hi ha waypoints */
+      const altParam=(opts&&opts.alternatives&&points.length===2)?'&alternatives=3':'';
       const coordsStr=points.map(p=>`${p.lng},${p.lat}`).join(';');
       for(const baseUrl of orderedOsrmEndpoints()){
         const controller=new AbortController();
         const timeoutId=setTimeout(()=>controller.abort(),ROUTE_REQUEST_TIMEOUT_MS);
-        const url=`${baseUrl}/${coordsStr}?overview=full&geometries=geojson&continue_straight=true${buildOsrmRadiuses(points)}`;
+        const url=`${baseUrl}/${coordsStr}?overview=full&geometries=geojson&continue_straight=true${altParam}${buildOsrmRadiuses(points)}`;
         try{
           debugLog(`Iniciant fetch a OSRM (${points.length} punts)... ${baseUrl}`);
           const response=await fetch(url,{signal:controller.signal});
@@ -2181,6 +2208,88 @@
       return cand.backtrackM>Math.max(60,cand.distanceM*0.1);
     }
 
+    /* ── Rotació persistida per direccions sempre noves ──
+       Avancem el rumb base amb l'angle auri (~137.5°) a cada generació, de
+       manera que sessions consecutives comencen explorant direccions diferents
+       en lloc de partir sempre del mateix sector. */
+    const GOLDEN_ANGLE=Math.PI*(3-Math.sqrt(5));
+    const ROUTE_ROTATION_KEY='wisewalk-route-rotation';
+    function nextRouteRotation(){
+      let base=parseFloat(localStorage.getItem(ROUTE_ROTATION_KEY));
+      if(!isFinite(base))base=Math.random()*2*Math.PI;
+      base=(base+GOLDEN_ANGLE)%(2*Math.PI);
+      try{localStorage.setItem(ROUTE_ROTATION_KEY,String(base));}catch(_){}
+      return base;
+    }
+
+    /* ── Memòria anti-repetició amb decaïment temporal ──
+       Desem les cel·les (~44 m) per on passen les rutes ja triades. Quan
+       generem candidates, penalitzem les que trepitgen cel·les recents, així
+       no proposem el mateix d'ahir; el pes de cada cel·la es redueix a la
+       meitat cada pocs dies i s'oblida del tot al cap d'unes setmanes. */
+    const ROUTE_MEMORY_KEY='wisewalk-route-memory';
+    const ROUTE_CELL_DEG=0.0004;
+    const ROUTE_MEMORY_HALFLIFE_MS=5*86400000;
+    const ROUTE_MEMORY_MAX_AGE_MS=21*86400000;
+    const ROUTE_MEMORY_MAX_CELLS=6000;
+
+    function routeCellKey(lat,lng){
+      return Math.round(lat/ROUTE_CELL_DEG)+'_'+Math.round(lng/ROUTE_CELL_DEG);
+    }
+    /* coords en format OSRM [lng,lat] */
+    function routeCellsFromCoords(coords){
+      const set=new Set();
+      if(coords)for(const c of coords)set.add(routeCellKey(c[1],c[0]));
+      return set;
+    }
+    function loadRouteMemory(){
+      try{
+        const raw=JSON.parse(localStorage.getItem(ROUTE_MEMORY_KEY));
+        if(raw&&typeof raw==='object')return raw;
+      }catch(_){}
+      return {};
+    }
+    function pruneRouteMemory(mem){
+      const now=Date.now();
+      let entries=Object.entries(mem).filter(([,t])=>now-t<=ROUTE_MEMORY_MAX_AGE_MS);
+      if(entries.length>ROUTE_MEMORY_MAX_CELLS){
+        entries.sort((a,b)=>b[1]-a[1]);
+        entries.length=ROUTE_MEMORY_MAX_CELLS;
+      }
+      const out={};
+      for(const [k,t] of entries)out[k]=t;
+      return out;
+    }
+    function rememberRouteCoords(){
+      const mem=loadRouteMemory();
+      const now=Date.now();
+      for(const coords of arguments){
+        for(const key of routeCellsFromCoords(coords))mem[key]=now;
+      }
+      try{localStorage.setItem(ROUTE_MEMORY_KEY,JSON.stringify(pruneRouteMemory(mem)));}catch(_){}
+    }
+    /* 0 = ruta totalment nova, 1 = totes les cel·les ja trepitjades i recents */
+    function routeFreshnessPenalty(coords,mem){
+      const cells=routeCellsFromCoords(coords);
+      if(!cells.size)return 0;
+      const now=Date.now();
+      let weighted=0;
+      for(const key of cells){
+        const t=mem[key];
+        if(t==null)continue;
+        weighted+=Math.pow(0.5,(now-t)/ROUTE_MEMORY_HALFLIFE_MS);
+      }
+      return weighted/cells.size;
+    }
+
+    /* Puntuació d'una variant de ruta: com més baixa, millor. Combina
+       desviació de distància, repetició (frescor) i anada-i-tornada. */
+    function candidateScore(distanceM,freshness,backtrackM,targetM){
+      const distKm=Math.abs(distanceM-targetM)/1000;
+      const back=backtrackM>Math.max(60,distanceM*0.1)?1:0;
+      return distKm*2+freshness*1+back*2;
+    }
+
     async function fetchElevationGain(coordinates){
       try{
         const step=Math.max(1,Math.floor(coordinates.length/90));
@@ -2203,33 +2312,40 @@
     }
 
     async function generateReturnRoute(destination,origin){
-      const dlat=origin.lat-destination.lat;
-      const dlng=origin.lng-destination.lng;
-      const dist=Math.sqrt(dlat*dlat+dlng*dlng);
+      const straightM=haversineDistance(destination.lat,destination.lng,origin.lat,origin.lng);
 
-      if(dist>0.00001){
-        const midLat=(destination.lat+origin.lat)/2;
-        const midLng=(destination.lng+origin.lng)/2;
-        const offset=0.003;
-        const sign=Math.random()>0.5?1:-1;
-        const waypoint={
-          lat:midLat+sign*(-dlng/dist)*offset,
-          lng:midLng+sign*(dlat/dist)*offset
-        };
-        try{
-          debugLog('Generant ruta de tornada amb waypoint alternatiu...');
-          const data=await fetchOsrmRoute([destination,waypoint,origin]);
-          const route=data.routes[0];
+      if(straightM>10){
+        /* Desviament lateral ample (proporcional a la distància) a banda i
+           banda de la línia directa: la tornada forma un bucle per un altre
+           corredor en lloc de refer el camí d'anada. Triem el costat amb
+           carrers més frescos i sense trams repetits. */
+        const mid={lat:(destination.lat+origin.lat)/2,lng:(destination.lng+origin.lng)/2};
+        const bearingDO=bearingBetween(destination,origin);
+        const offsetM=Math.min(Math.max(straightM*0.35,250),700);
+        const mem=loadRouteMemory();
+
+        const sides=await Promise.allSettled([1,-1].map(sign=>{
+          const wp=destinationFromBearing(mid,offsetM,bearingDO+sign*Math.PI/2);
+          return fetchOsrmRoute([destination,wp,origin]);
+        }));
+
+        let best=null;
+        let bestScore=Infinity;
+        sides.forEach(r=>{
+          if(r.status!=='fulfilled')return;
+          const route=r.value.routes[0];
+          if(!route)return;
           const coords=route.geometry.coordinates;
           const backtrackM=computeBacktrackMeters(coords);
-          if(backtrackM<=Math.max(60,route.distance*0.1)){
-            debugLog(`Ruta de tornada obtinguda: ${coords.length} punts`);
-            return coords;
-          }
-          debugLog(`Tornada amb ${Math.round(backtrackM)} m d'anada i tornada, provant directa`);
-        }catch(err){
-          debugLog(`Ruta amb waypoint fallida, provant directa: ${(err&&err.message)||err}`);
+          if(backtrackM>Math.max(60,route.distance*0.1))return;
+          const score=routeFreshnessPenalty(coords,mem);
+          if(score<bestScore){bestScore=score;best=coords;}
+        });
+        if(best){
+          debugLog(`Ruta de tornada en bucle: ${best.length} punts`);
+          return best;
         }
+        debugLog('Cap tornada en bucle vàlida, provant directa');
       }
 
       try{
@@ -2246,9 +2362,25 @@
     /* Distància d'anada seleccionable (la tornada aproximadament la duplica) */
     let selectedOutboundKm=parseFloat(localStorage.getItem('wisewalk-outbound-km'))||1.5;
     function getTargetOutboundM(){return selectedOutboundKm*1000;}
+    /* Distància total de la caminada (anada+tornada o perímetre de l'anella) */
+    function getTargetTotalM(){return getTargetOutboundM()*2;}
+
+    /* Mode de ruta: 'loop' (anella, per defecte) o 'outback' (anada i tornada) */
+    let selectedRouteMode=localStorage.getItem('wisewalk-route-mode')||'loop';
+    function renderModeChips(){
+      document.querySelectorAll('.mode-chip').forEach(chip=>{
+        chip.classList.toggle('active',chip.dataset.mode===selectedRouteMode);
+      });
+    }
     function renderDistanceChips(){
-      document.querySelectorAll('.distance-chip').forEach(chip=>{
-        chip.classList.toggle('active',parseFloat(chip.dataset.km)===selectedOutboundKm);
+      const loop=selectedRouteMode==='loop';
+      const label=document.getElementById('distance-label');
+      if(label)label.textContent=loop?'Volta':'Anada';
+      document.querySelectorAll('.distance-chip:not(.mode-chip)').forEach(chip=>{
+        const km=parseFloat(chip.dataset.km);
+        /* En anella el chip mostra la distància total (volta sencera) */
+        chip.textContent=`${formatDecimal(loop?km*2:km)} km`;
+        chip.classList.toggle('active',km===selectedOutboundKm);
       });
     }
 
@@ -2269,89 +2401,219 @@
 
     /* Fetches one walkable route towards a fixed bearing and returns it as a
        candidate with its real on-foot distance and backtrack meters */
-    async function fetchCandidateRoute(start,bearing,radiusM){
+    async function fetchCandidateRoute(start,bearing,radiusM,targetM,mem){
       const destination=destinationFromBearing(start,radiusM,bearing);
-      let data=null;
+      const memory=mem||loadRouteMemory();
+      const target=targetM||getTargetOutboundM();
+      const variants=[];
+      /* Ruta amb punts intermedis: rumb estable però per carrers variats */
       if(radiusM>=MIN_RADIUS_FOR_VIAS_M){
         try{
-          data=await fetchOsrmRoute([start,...buildOutboundVias(start,bearing,radiusM),destination]);
+          const data=await fetchOsrmRoute([start,...buildOutboundVias(start,bearing,radiusM),destination]);
+          if(data&&Array.isArray(data.routes))variants.push(...data.routes);
         }catch(err){
           debugLog(`Ruta amb punts intermedis fallida, provant directa: ${(err&&err.message)||err}`);
         }
       }
-      if(!data)data=await fetchOsrmRoute([start,destination]);
-      const route=data.routes[0];
-      if(!route||typeof route.distance!=='number')throw new Error('Ruta invàlida');
-      const coords=route.geometry&&route.geometry.coordinates;
-      if(!coords||coords.length<2)throw new Error('Geometria invàlida');
-      return {
-        data,
-        bearing,
-        coords,
-        distanceM:route.distance,
-        backtrackM:computeBacktrackMeters(coords),
-        destination:{lat:coords[coords.length-1][1],lng:coords[coords.length-1][0]}
-      };
+      /* Ruta directa demanant alternatives: camins genuïnament diferents */
+      try{
+        const data=await fetchOsrmRoute([start,destination],{alternatives:true});
+        if(data&&Array.isArray(data.routes))variants.push(...data.routes);
+      }catch(err){
+        if(!variants.length)throw err;
+      }
+
+      let best=null;
+      let bestScore=Infinity;
+      for(const route of variants){
+        if(!route||typeof route.distance!=='number')continue;
+        const coords=route.geometry&&route.geometry.coordinates;
+        if(!coords||coords.length<2)continue;
+        const backtrackM=computeBacktrackMeters(coords);
+        const freshness=routeFreshnessPenalty(coords,memory);
+        const score=candidateScore(route.distance,freshness,backtrackM,target);
+        if(score<bestScore){
+          bestScore=score;
+          best={
+            data:{routes:[route]},
+            bearing,
+            coords,
+            distanceM:route.distance,
+            backtrackM,
+            freshness,
+            score,
+            destination:{lat:coords[coords.length-1][1],lng:coords[coords.length-1][0]}
+          };
+        }
+      }
+      if(!best)throw new Error('Ruta invàlida');
+      return best;
     }
 
     /* Generates ROUTE_OPTION_COUNT candidate destinations spread evenly
        around the compass (random base rotation + one sector each, with
        jitter), fetched in parallel. Candidates too far from the target
        distance get a single corrective retry, also in parallel. */
+    /* Tria n candidates maximitzant la dispersió angular (cap a totes
+       direccions) i prioritzant les rutes més fresques i ben ajustades. */
+    function selectSpreadFresh(pool,n){
+      const rest=pool.slice().sort((a,b)=>a.score-b.score);
+      const chosen=[rest.shift()];
+      while(chosen.length<n&&rest.length){
+        let bestIdx=-1;
+        let bestVal=-Infinity;
+        rest.forEach((c,idx)=>{
+          let minSep=Infinity;
+          for(const ch of chosen)minSep=Math.min(minSep,angularGap(c.bearing,ch.bearing));
+          /* separació gran i score baix; π normalitza la separació a ~[0,1] */
+          const val=minSep/Math.PI-c.score*0.4;
+          if(val>bestVal){bestVal=val;bestIdx=idx;}
+        });
+        chosen.push(rest.splice(bestIdx,1)[0]);
+      }
+      return chosen;
+    }
+
     async function generateRouteOptions(start){
       const targetM=getTargetOutboundM();
       const radius=targetM/URBAN_TORTUOSITY_FACTOR;
-      const sector=(2*Math.PI)/ROUTE_OPTION_COUNT;
-      const base=Math.random()*2*Math.PI;
-      const bearings=[];
-      for(let i=0;i<ROUTE_OPTION_COUNT;i++){
-        bearings.push(base+sector*i+(Math.random()-0.5)*sector*0.5);
-      }
-
-      const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius)));
-      const options=[];
-      const retries=[];
-      results.forEach((r,i)=>{
-        if(r.status!=='fulfilled'){
-          debugLog(`Opció ${i+1} fallida: ${(r.reason&&r.reason.message)||r.reason}`);
-          retries.push({bearing:bearings[i],radius:radius*0.8,fallback:null});
-          return;
-        }
-        const cand=r.value;
-        const diffKm=Math.abs(cand.distanceM-targetM)/1000;
-        if(diffKm<=DISTANCE_TOLERANCE_KM&&!hasExcessBacktrack(cand)){
-          options.push(cand);
-        }else{
-          if(hasExcessBacktrack(cand)){
-            debugLog(`Opció ${i+1} amb ${Math.round(cand.backtrackM)} m d'anada i tornada, reintentant amb altres punts intermedis`);
-          }
-          const corrected=Math.min(Math.max(radius*(targetM/cand.distanceM),300),targetM*1.5);
-          retries.push({bearing:cand.bearing,radius:corrected,fallback:cand});
-        }
-      });
-
-      if(retries.length){
-        const retryResults=await Promise.allSettled(retries.map(r=>fetchCandidateRoute(start,r.bearing,r.radius)));
-        retryResults.forEach((r,i)=>{
-          const fallback=retries[i].fallback;
-          if(r.status==='fulfilled'){
-            const cand=r.value;
-            /* Si el reintent torna a repetir trams però el primer intent era
-               net (només desviat de distància), queda't el primer */
-            options.push(fallback&&!hasExcessBacktrack(fallback)&&hasExcessBacktrack(cand)?fallback:cand);
-          }else if(fallback){
-            options.push(fallback);
-          }
+      const mem=loadRouteMemory();
+      /* Mostreja més direccions de les que es mostren, amb rotació base
+         persistida (angle auri) i radi dins l'anell de tolerància, perquè
+         destins i rumbs no caiguin mai al mateix lloc */
+      const samples=Math.max(ROUTE_OPTION_COUNT*2,6);
+      const sector=(2*Math.PI)/samples;
+      const base=nextRouteRotation();
+      const probes=[];
+      for(let i=0;i<samples;i++){
+        probes.push({
+          bearing:base+sector*i+(Math.random()-0.5)*sector*0.6,
+          radius:radius*(1+(Math.random()-0.5)*0.18)
         });
       }
 
-      if(!options.length){
+      const results=await Promise.allSettled(
+        probes.map(p=>fetchCandidateRoute(start,p.bearing,p.radius,targetM,mem))
+      );
+      const cands=[];
+      results.forEach((r,i)=>{
+        if(r.status==='fulfilled')cands.push(r.value);
+        else debugLog(`Sonda ${i+1} fallida: ${(r.reason&&r.reason.message)||r.reason}`);
+      });
+
+      if(!cands.length){
         throw new Error('No s\'ha pogut generar cap ruta. Comprova la connexió i torna-ho a provar.');
       }
 
+      /* Prioritza les que compleixen distància i no repeteixen trams; si no
+         n'hi ha prou, completa amb la resta (ja ordenades per qualitat) */
+      const within=cands.filter(c=>Math.abs(c.distanceM-targetM)/1000<=DISTANCE_TOLERANCE_KM&&!hasExcessBacktrack(c));
+      const pool=within.length>=ROUTE_OPTION_COUNT?within:cands;
+
+      const chosen=selectSpreadFresh(pool,Math.min(ROUTE_OPTION_COUNT,pool.length));
       /* Stable display order: clockwise from north */
-      options.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
-      return options.slice(0,ROUTE_OPTION_COUNT);
+      chosen.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
+      return chosen;
+    }
+
+    /* ── Rutes en anella (loop) ──
+       Distribueix N punts de pas al voltant de l'origen formant un polígon
+       irregular i deixa que OSRM els enllaci en un circuit tancat
+       (inici→p1→…→pN→inici). Cobreix totes les direccions per construcció i
+       no refà el camí, a diferència de l'anada-i-tornada. */
+    const LOOP_WAYPOINTS=5;
+
+    function buildLoopWaypoints(start,radiusM,base,sign){
+      const wps=[];
+      const step=(2*Math.PI)/LOOP_WAYPOINTS;
+      for(let i=0;i<LOOP_WAYPOINTS;i++){
+        const ang=base+sign*step*i+(Math.random()-0.5)*step*0.5;
+        const r=radiusM*(1+(Math.random()-0.5)*0.3);
+        wps.push(destinationFromBearing(start,r,ang));
+      }
+      return wps;
+    }
+
+    /* Divideix una anella pel punt més allunyat de l'origen en dos trams
+       (anada/tornada), perquè encaixi amb les fases de la caminada */
+    function splitLoopAtFarthest(coords,origin){
+      let k=0;
+      let maxD=-1;
+      for(let i=0;i<coords.length;i++){
+        const d=haversineDistance(origin.lat,origin.lng,coords[i][1],coords[i][0]);
+        if(d>maxD){maxD=d;k=i;}
+      }
+      k=Math.min(Math.max(k,1),coords.length-2);
+      return {
+        outbound:coords.slice(0,k+1),
+        return:coords.slice(k),
+        destination:{lat:coords[k][1],lng:coords[k][0]}
+      };
+    }
+
+    async function fetchLoopCandidate(start,radiusM,base,sign,targetTotalM,mem){
+      const wps=buildLoopWaypoints(start,radiusM,base,sign);
+      const data=await fetchOsrmRoute([start,...wps,start]);
+      const route=data.routes[0];
+      if(!route||typeof route.distance!=='number')throw new Error('Anella invàlida');
+      const coords=route.geometry&&route.geometry.coordinates;
+      if(!coords||coords.length<4)throw new Error('Geometria d\'anella invàlida');
+      const split=splitLoopAtFarthest(coords,start);
+      const freshness=routeFreshnessPenalty(coords,mem);
+      const backtrackM=computeBacktrackMeters(coords);
+      return {
+        loop:true,
+        data:{routes:[route]},
+        bearing:base,
+        coords,
+        outboundCoords:split.outbound,
+        returnCoords:split.return,
+        destination:split.destination,
+        distanceM:route.distance,
+        totalDistanceM:route.distance,
+        backtrackM,
+        freshness,
+        score:candidateScore(route.distance,freshness,backtrackM,targetTotalM)
+      };
+    }
+
+    async function generateLoopOptions(start){
+      const targetTotalM=getTargetTotalM();
+      const mem=loadRouteMemory();
+      /* Radi del cercle perquè el perímetre del polígon s'acosti a la
+         distància total demanada (corregit per la tortuositat urbana) */
+      const perimeter=targetTotalM/URBAN_TORTUOSITY_FACTOR;
+      const radius=perimeter/(LOOP_WAYPOINTS*2*Math.sin(Math.PI/LOOP_WAYPOINTS));
+      const base=nextRouteRotation();
+      const samples=Math.max(ROUTE_OPTION_COUNT*2,5);
+      const phase=(2*Math.PI)/samples;
+      const probes=[];
+      for(let i=0;i<samples;i++){
+        probes.push({
+          base:base+phase*i,
+          sign:Math.random()<0.5?1:-1,
+          radius:radius*(1+(Math.random()-0.5)*0.12)
+        });
+      }
+
+      const results=await Promise.allSettled(
+        probes.map(p=>fetchLoopCandidate(start,p.radius,p.base,p.sign,targetTotalM,mem))
+      );
+      const cands=[];
+      results.forEach((r,i)=>{
+        if(r.status==='fulfilled')cands.push(r.value);
+        else debugLog(`Anella ${i+1} fallida: ${(r.reason&&r.reason.message)||r.reason}`);
+      });
+
+      if(!cands.length){
+        throw new Error('No s\'ha pogut generar cap anella. Comprova la connexió i torna-ho a provar.');
+      }
+
+      const within=cands.filter(c=>Math.abs(c.totalDistanceM-targetTotalM)/1000<=DISTANCE_TOLERANCE_KM*1.5);
+      const pool=within.length>=ROUTE_OPTION_COUNT?within:cands;
+      const chosen=selectSpreadFresh(pool,Math.min(ROUTE_OPTION_COUNT,pool.length));
+      chosen.sort((a,b)=>bearingToDegrees(a.bearing)-bearingToDegrees(b.bearing));
+      return chosen;
     }
 
     /* Single best route towards any direction (used by the mid-walk
@@ -2359,18 +2621,19 @@
     async function generateRouteFromLocation(start,overrideOutboundM){
       const targetM=overrideOutboundM||getTargetOutboundM();
       const radius=Math.max(120,targetM/URBAN_TORTUOSITY_FACTOR);
-      const base=Math.random()*2*Math.PI;
+      const mem=loadRouteMemory();
+      const base=nextRouteRotation();
       const sector=(2*Math.PI)/3;
       const bearings=[base,base+sector,base+2*sector];
 
-      const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius)));
+      const results=await Promise.allSettled(bearings.map(b=>fetchCandidateRoute(start,b,radius,targetM,mem)));
       let best=null;
       let bestScore=Infinity;
       let lastError=null;
       results.forEach(r=>{
         if(r.status!=='fulfilled'){lastError=r.reason;return;}
-        /* Penalitza fort les candidates que repeteixen trams de carrer */
-        const score=Math.abs(r.value.distanceM-targetM)+(hasExcessBacktrack(r.value)?100000:0);
+        /* candidateScore ja combina distància, frescor i anada-i-tornada */
+        const score=r.value.score;
         if(score<bestScore){bestScore=score;best=r.value;}
       });
 
@@ -2528,15 +2791,16 @@
       if(!box)return;
       box.innerHTML='';
       routeOptions.forEach((opt,idx)=>{
-        const totalKm=(opt.distanceM*2)/1000;
+        const totalKm=(opt.totalDistanceM||opt.distanceM*2)/1000;
         const est=calculateRouteCalories(getCalorieProfile(),totalKm,0,5.0);
+        const title=opt.loop?`Anella ${bearingLabel(opt.bearing)}`:`Cap ${bearingLabel(opt.bearing)}`;
         const btn=document.createElement('button');
         btn.type='button';
         btn.className='route-option'+(idx===selectedOptionIdx?' active':'');
         btn.innerHTML=`
           <span class="route-option-dir"><svg viewBox="0 0 24 24" style="transform:rotate(${Math.round(bearingToDegrees(opt.bearing))}deg)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
           <span>
-            <span class="route-option-title">Cap ${bearingLabel(opt.bearing)}</span>
+            <span class="route-option-title">${title}</span>
             <span class="route-option-meta">${formatDecimal(totalKm.toFixed(1))} km · ~${est.minutes} min · ~${est.kcal} kcal</span>
           </span>`;
         btn.addEventListener('click',()=>selectRouteOption(idx));
@@ -2560,15 +2824,27 @@
       setWalkButtonsVisibility({});
 
       try{
-        outboundCoordinates=opt.coords;
         currentRoute={start:opt.origin,end:opt.destination};
-
-        /* Return route and elevation fetched in parallel */
-        const [retCoords,totalPositiveGainM]=await Promise.all([
-          generateReturnRoute(opt.destination,opt.origin),
-          fetchElevationGain(opt.coords)
-        ]);
-        returnCoordinates=retCoords||[...opt.coords].reverse();
+        let totalPositiveGainM;
+        if(opt.loop){
+          /* L'anella ja ve dividida en anada/tornada; no cal recalcular res */
+          outboundCoordinates=opt.outboundCoords;
+          returnCoordinates=opt.returnCoords;
+          totalPositiveGainM=await fetchElevationGain(opt.coords);
+          rememberRouteCoords(opt.coords);
+        }else{
+          outboundCoordinates=opt.coords;
+          /* Return route and elevation fetched in parallel */
+          const [retCoords,gain]=await Promise.all([
+            generateReturnRoute(opt.destination,opt.origin),
+            fetchElevationGain(opt.coords)
+          ]);
+          returnCoordinates=retCoords||[...opt.coords].reverse();
+          totalPositiveGainM=gain;
+          /* Recorda la ruta triada perquè les properes generacions evitin
+             aquests carrers durant uns dies */
+          rememberRouteCoords(outboundCoordinates,returnCoordinates);
+        }
 
         const outboundDistM=calculatePolylineDistance(outboundCoordinates);
         const returnDistM=calculatePolylineDistance(returnCoordinates);
@@ -2612,19 +2888,20 @@
         getLocation();
         return;
       }
-      setRouteInfoText('Buscant destinacions al teu voltant...');
+      const loopMode=selectedRouteMode==='loop';
+      setRouteInfoText(loopMode?'Dissenyant anelles al teu voltant...':'Buscant destinacions al teu voltant...');
       btnGenerateRoute.disabled=true;
       hideRouteOptions();
       routeDetails.style.display='none';
       setWalkButtonsVisibility({});
 
       try{
-        const options=await generateRouteOptions(origin);
+        const options=await(loopMode?generateLoopOptions(origin):generateRouteOptions(origin));
         options.forEach(o=>{o.origin=origin;});
         routeOptions=options;
         selectedOptionIdx=-1;
         renderRouteOptions();
-        setRouteInfoText(options.length>1?'Tria cap a on vols caminar:':'Només s\'ha trobat una destinació:');
+        setRouteInfoText(options.length>1?'Tria quina ruta vols fer:':'Només s\'ha trobat una ruta:');
       }catch(err){
         debugLog('Error a generateRandomRoute');
         debugLog((err&&err.stack)||err);
@@ -3045,6 +3322,15 @@
       renderDistanceChips();
     });
     renderDistanceChips();
+    document.getElementById('mode-chips').addEventListener('click',e=>{
+      const chip=e.target.closest('.mode-chip');
+      if(!chip)return;
+      selectedRouteMode=chip.dataset.mode;
+      localStorage.setItem('wisewalk-route-mode',selectedRouteMode);
+      renderModeChips();
+      renderDistanceChips();
+    });
+    renderModeChips();
     document.addEventListener('visibilitychange',()=>{
       if(!document.hidden){
         updatePetUi();
