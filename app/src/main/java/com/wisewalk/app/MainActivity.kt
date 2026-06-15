@@ -112,14 +112,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var mapDarknessProgress: Int = 50
 
     // --- Pokémon GO-style follow camera ---
-    /** Latest GPS fix, used to glide the camera back to the marker. */
+    /** Latest raw GPS fix, used as a fallback target for the follow camera. */
     private var lastUserLocation: GeoPoint? = null
+    /** Latest position of the *visible* user marker during a walk (snapped onto
+     *  the route when close to it). The camera follows this so the dot the user
+     *  sees — not the raw GPS reading — stays at the lower-center of the screen. */
+    private var lastSnappedLocation: GeoPoint? = null
+    /** The point the follow camera should keep at the lower-center: the visible
+     *  (snapped) marker if we have one, otherwise the raw GPS fix. */
+    private fun cameraFollowTarget(): GeoPoint? = lastSnappedLocation ?: lastUserLocation
     private val cameraHandler = android.os.Handler(android.os.Looper.getMainLooper())
     /** After the user pans/zooms, this re-locks the camera onto the marker. */
     private val resumeFollowRunnable = Runnable {
         if (isWalkGpsModeActive) {
             isUserInteractingWithMap = false
-            lastUserLocation?.let { followUserWithOffset(it, animate = true) }
+            cameraFollowTarget()?.let { followUserWithOffset(it, animate = true) }
         }
     }
 
@@ -262,7 +269,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (::myLocationOverlay.isInitialized) {
                         myLocationOverlay.onLocationChanged(loc, null)
                     }
-                    if (isWalkGpsModeActive && !isUserInteractingWithMap) {
+                    // While navigating, the camera is driven by the snapped
+                    // marker position (see updateSnappedPosition). Only follow the
+                    // raw fix as a fallback before any snapped position arrives.
+                    if (isWalkGpsModeActive && !isUserInteractingWithMap && lastSnappedLocation == null) {
                         followUserWithOffset(geoPoint, animate = true)
                     }
                 }
@@ -306,7 +316,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             myLocationOverlay.enableMyLocation()
             if (isWalkGpsModeActive) {
                 myLocationOverlay.disableFollowLocation()
-                lastUserLocation?.let { loc ->
+                cameraFollowTarget()?.let { loc ->
                     mapView.post { if (isWalkGpsModeActive) followUserWithOffset(loc, animate = false) }
                 }
             }
@@ -440,7 +450,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             try {
                 isUserInteractingWithMap = false
                 cancelResumeFollow()
-                val loc = lastUserLocation ?: myLocationOverlay.myLocation
+                val loc = cameraFollowTarget() ?: myLocationOverlay.myLocation
                 if (loc != null) {
                     if (isWalkGpsModeActive) {
                         followUserWithOffset(loc, animate = true)
@@ -1186,7 +1196,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     // We drive the camera ourselves (marker below center), so keep
                     // osmdroid's own exact-centering follow disabled.
                     activity.myLocationOverlay.disableFollowLocation()
-                    activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
+                    activity.cameraFollowTarget()?.let { activity.followUserWithOffset(it, animate = false) }
                     if (activity.isCompassEnabled) {
                         activity.rotationSensor?.let {
                             activity.sensorManager.registerListener(activity, it, SensorManager.SENSOR_DELAY_UI)
@@ -1212,6 +1222,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             activity.runOnUiThread {
                 activity.isWalkGpsModeActive = false
                 activity.isUserInteractingWithMap = false
+                activity.lastSnappedLocation = null
                 activity.cancelResumeFollow()
                 activity.sensorManager.unregisterListener(activity)
                 activity.mapView.mapOrientation = 0f
@@ -1250,6 +1261,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         activity.myLocationOverlay.isDrawAccuracyEnabled = true
                     }
                 }
+                // This is the position of the marker the user actually sees. Make
+                // the camera follow it so the user's dot — not the raw GPS point
+                // off to the side of the path — stays at the lower-center.
+                val displayed = GeoPoint(lat, lng)
+                activity.lastSnappedLocation = displayed
+                if (activity.isWalkGpsModeActive && !activity.isUserInteractingWithMap) {
+                    activity.followUserWithOffset(displayed, animate = true)
+                }
                 activity.mapView.invalidate()
             }
         }
@@ -1282,7 +1301,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         // center); otherwise let osmdroid center exactly.
                         if (activity.isWalkGpsModeActive) {
                             activity.myLocationOverlay.disableFollowLocation()
-                            activity.lastUserLocation?.let { activity.followUserWithOffset(it, animate = false) }
+                            activity.cameraFollowTarget()?.let { activity.followUserWithOffset(it, animate = false) }
                         } else {
                             activity.myLocationOverlay.enableFollowLocation()
                         }
