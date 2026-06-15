@@ -2553,6 +2553,15 @@
       return wps;
     }
 
+    function forceLoopEndpointsAtOrigin(coords,origin){
+      if(!Array.isArray(coords)||coords.length<2)return coords;
+      const originCoord=[origin.lng,origin.lat];
+      const fixed=coords.slice();
+      fixed[0]=originCoord;
+      fixed[fixed.length-1]=originCoord;
+      return fixed;
+    }
+
     /* Divideix una anella pel punt més allunyat de l'origen en dos trams
        (anada/tornada), perquè encaixi amb les fases de la caminada */
     function splitLoopAtFarthest(coords,origin){
@@ -2575,8 +2584,9 @@
       const data=await fetchOsrmRoute([start,...wps,start]);
       const route=data.routes[0];
       if(!route||typeof route.distance!=='number')throw new Error('Anella invàlida');
-      const coords=route.geometry&&route.geometry.coordinates;
+      const coords=forceLoopEndpointsAtOrigin(route.geometry&&route.geometry.coordinates,start);
       if(!coords||coords.length<4)throw new Error('Geometria d\'anella invàlida');
+      route.geometry.coordinates=coords;
       const split=splitLoopAtFarthest(coords,start);
       const freshness=routeFreshnessPenalty(coords,mem);
       const backtrackM=computeBacktrackMeters(coords);
