@@ -44,7 +44,11 @@ Catàleg d'elements (constant JS):
 
 Funcions pures: `getPet()`, `savePet()`, `applyPetDecay()` (calcula la baixada des de `lastTickAt` en obrir l'app: fam −15/dia, felicitat −10/dia, amb sostre de 3 dies perquè una absència llarga no sigui un càstig), `feedPet(type)`, `playWithPet(type)`, `addPetXp(n)`, `getInventory()`, `addItem(type)`, `consumeItem(type)`.
 
-Evolució per XP: ou (en reclamar) → cria (50) → jove (150) → adult (400). Si la fam arriba a 0 durant 2 dies, la mascota «se'n va d'excursió» (mai mor) i torna automàticament amb la següent caminada completada.
+Evolució per XP: ou (en reclamar) → cria (50) → jove (150) → adult (400). Si la fam arriba a 0 durant 2 dies, la mascota «se'n va d'excursió» i torna automàticament amb la següent caminada completada.
+
+### Mort, cementiri i renaixement (vegeu també la Fase 6)
+
+Si fa **3 dies o més que no s'obre l'app** (`PET_DEATH_AFTER_MS`, comprovat a `applyPetDecay` via el temps transcorregut des de `lastTickAt`), la mascota **mor**: es genera una **làpida** al cementiri (`wisewalk-cemetery`) amb el seu retrat, dates de naixement i mort, quilòmetres caminats i kcal cremades durant la seva vida, i s'esborra `wisewalk-pet`. La propera ruta torna a mostrar un **ou** per reclamar i així neix una mascota nova.
 
 **✅ Comprovació per a l'usuari**: des de la consola de debug, crear mascota, alimentar-la i verificar persistència i decaïment manipulant `lastTickAt`.
 
@@ -88,16 +92,23 @@ Evolució per XP: ou (en reclamar) → cria (50) → jove (150) → adult (400).
 - Micro-animacions: mascota que saluda en obrir l'app, celebració en evolucionar (confeti CSS).
 - Opcional (fase posterior): notificació nativa diària si la fam és baixa, reutilitzant la infraestructura de notificacions de `StepTrackingService`.
 
+## Fase 6 — Mort, cementiri, dissenys únics i còpia de seguretat
+
+- **Mort per inactivitat**: si fa 3 dies que no s'obre l'app, `applyPetDecay()` crida `killPet()`, que crea una làpida i esborra la mascota.
+- **Cementiri** (`screen-cemetery`, accessible des de Configuració i del modal de mort): graella de làpides, cadascuna amb el retrat de la mascota (pixel art amb el seu disseny), nom, dates de naixement i mort, km caminats i kcal cremades durant la seva vida (acumulats a `pet.kmWalked`/`pet.kcalBurned` a `notifyPetWalkCompleted`).
+- **Renaixement**: en morir, la propera ruta torna a mostrar un ou. Cada ou pendent (`wisewalk-pending-egg`) i cada mascota tenen un **disseny únic autogenerat** (`generatePetDesign()`): color de cos, color de detall, patró de pell (taques/ratlles/panxa), color d'ulls i **color d'ou aleatori**. El color de l'ou es comunica al mapa natiu amb `setEggColors`.
+- **Exportar / importar dades**: al final de Configuració, dos botons desen (`exportAppData` natiu o descàrrega web) i restauren totes les claus `wisewalk-*` de `localStorage` en un fitxer JSON. La importació fa servir `WebChromeClient.onShowFileChooser`.
+
 ---
 
 ## Resum de canvis per capa
 
 | Capa | Canvis |
 |---|---|
-| `wisewalk.html` (JS) | Mòdul d'estat de mascota + inventari, modal d'eclosió, pantalla `screen-pet`, spawn i recollida de col·leccionables, integració amb el flux de reclamar |
-| `wisewalk.html` (CSS) | Carcassa Tamagotchi, LCD pixel art, barres, inventari, banner de recollida |
-| `MainActivity.kt` | 3 mètodes de pont nous: `setDestinationMarkerStyle`, `drawCollectibles`, `removeCollectible` |
-| `PulsingMarkerOverlay.kt` | Mode «ou» |
+| `wisewalk.html` (JS) | Mòdul d'estat de mascota + inventari, modal d'eclosió, pantalla `screen-pet`, spawn i recollida de col·leccionables, integració amb el flux de reclamar, dissenys únics, mort + cementiri, exportació/importació de dades |
+| `wisewalk.html` (CSS) | Carcassa Tamagotchi, LCD pixel art, barres, inventari, banner de recollida, làpides del cementiri i modal de mort |
+| `MainActivity.kt` | Ponts: `setDestinationMarkerStyle`, `drawCollectibles`, `removeCollectible`, `setEggColors`, `exportAppData` + `onShowFileChooser` per a la importació |
+| `PulsingMarkerOverlay.kt` | Mode «ou» amb color de closca/taques configurable |
 | `CollectibleOverlay.kt` (nou) | Icones flotants d'elements sobre la ruta |
 
 ## Riscos i decisions obertes

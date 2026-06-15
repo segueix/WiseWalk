@@ -33,7 +33,9 @@ import android.hardware.SensorManager
 import android.util.Log
 import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
+import androidx.activity.result.contract.ActivityResultContracts
 import android.webkit.WebSettings
 import android.view.View
 import android.widget.ImageButton
@@ -70,6 +72,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
     private var pendingGeolocationOrigin: String? = null
+    /** Pending WebView <input type="file"> callback (used by the data importer). */
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = fileChooserCallback
+        fileChooserCallback = null
+        callback?.onReceiveValue(
+            if (result.resultCode == RESULT_OK)
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            else null
+        )
+    }
     private var locationReceiver: BroadcastReceiver? = null
     private var statsReceiver: BroadcastReceiver? = null
     private var isWalkGpsModeActive: Boolean = false
@@ -83,6 +98,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var isUserInteractingWithMap: Boolean = false
     private var destinationMarker: PulsingMarkerOverlay? = null
     private var destinationMarkerStyle: String = "flag"
+    /** Randomly generated mystery-egg colors sent from the web layer. */
+    private var eggShellColor: Int = Color.parseColor("#ffb300")
+    private var eggSpotColor: Int = Color.parseColor("#ff5252")
     private var collectibleOverlay: CollectibleOverlay? = null
     private var snappedLocationOverlay: SnappedLocationOverlay? = null
     private var copyrightOverlay: CopyrightOverlay? = null
@@ -163,6 +181,27 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     pendingGeolocationCallback = callback
                     pendingGeolocationOrigin = origin
                     requestLocationPermission()
+                }
+            }
+
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileChooserCallback?.onReceiveValue(null)
+                fileChooserCallback = filePathCallback
+                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                return try {
+                    fileChooserLauncher.launch(intent)
+                    true
+                } catch (e: ActivityNotFoundException) {
+                    fileChooserCallback = null
+                    Toast.makeText(this@MainActivity, "No hi ha cap selector de fitxers", Toast.LENGTH_SHORT).show()
+                    false
                 }
             }
         }
@@ -883,6 +922,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         destinationMarker?.stopAnimation()
                         val marker = PulsingMarkerOverlay(points.last())
                         marker.markerStyle = destinationMarkerStyle
+                        marker.eggShellColor = eggShellColor
+                        marker.eggSpotColor = eggSpotColor
                         destinationMarker = marker
                         mapView.overlays.add(marker)
                         marker.startAnimation(mapView)
@@ -1356,6 +1397,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         @JavascriptInterface
+        fun setEggColors(shellHex: String, spotHex: String) {
+            activity.runOnUiThread {
+                try {
+                    activity.eggShellColor = Color.parseColor(shellHex)
+                    activity.eggSpotColor = Color.parseColor(spotHex)
+                    activity.destinationMarker?.let {
+                        it.eggShellColor = activity.eggShellColor
+                        it.eggSpotColor = activity.eggSpotColor
+                        activity.mapView.invalidate()
+                    }
+                } catch (e: Exception) {
+                    Log.w("WiseWalk", "setEggColors: color invàlid", e)
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun setMapTheme(isDark: Boolean, accentHex: String) {
             activity.runOnUiThread {
                 try {
@@ -1415,6 +1473,51 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     Log.e("WiseWalk", "Error exportant debug log", e)
                     activity.runOnUiThread {
                         Toast.makeText(activity, "No s'ha pogut exportar el log", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        /** Saves the full app-data backup to a JSON file and offers it via the
+         *  Android share sheet (save to Drive, Files, send by email...). */
+        @JavascriptInterface
+        fun exportAppData(content: String) {
+            thread(name = "WiseWalkDataExport", start = true) {
+                try {
+                    val logsDir = File(activity.cacheDir, "logs")
+                    if (!logsDir.exists() && !logsDir.mkdirs()) {
+                        throw IllegalStateException("No s'ha pogut crear cacheDir/logs")
+                    }
+                    val fileName = "wisewalk-backup-${System.currentTimeMillis()}.json"
+                    val outFile = File(logsDir, fileName)
+                    outFile.writeText(content)
+                    val uri = FileProvider.getUriForFile(
+                        activity,
+                        "${activity.packageName}.fileprovider",
+                        outFile
+                    )
+                    activity.runOnUiThread {
+                        try {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_SUBJECT, "Còpia de seguretat de WiseWalk")
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            activity.startActivity(Intent.createChooser(shareIntent, "Exportar dades de WiseWalk"))
+                            Toast.makeText(activity, "Dades exportades correctament", Toast.LENGTH_SHORT).show()
+                        } catch (e: ActivityNotFoundException) {
+                            Log.w("WiseWalk", "No s'ha trobat cap app per exportar les dades", e)
+                            Toast.makeText(activity, "No hi ha cap app compatible per exportar", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Log.e("WiseWalk", "Error exportant dades", e)
+                            Toast.makeText(activity, "No s'han pogut exportar les dades", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("WiseWalk", "Error exportant dades", e)
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "No s'han pogut exportar les dades", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
