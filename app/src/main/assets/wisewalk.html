@@ -753,6 +753,21 @@
       return total;
     }
 
+    function coordinateFromPoint(point){
+      if(!point||typeof point.lat!=='number'||typeof point.lng!=='number')return null;
+      return [point.lng,point.lat];
+    }
+
+    function routeWithForcedEndpoints(coords,startPoint,endPoint){
+      if(!Array.isArray(coords)||!coords.length)return[];
+      const normalized=coords.map(c=>Array.isArray(c)?[c[0],c[1]]:c);
+      const startCoord=coordinateFromPoint(startPoint);
+      const endCoord=coordinateFromPoint(endPoint||startPoint);
+      if(startCoord)normalized[0]=startCoord;
+      if(endCoord)normalized[normalized.length-1]=endCoord;
+      return normalized;
+    }
+
     function findClosestPointIndex(coordinates,lat,lng){
       let minDist=Infinity,minIdx=0;
       for(let i=0;i<coordinates.length;i++){
@@ -1501,10 +1516,8 @@
       const def=PET_ITEMS[type];
       if(!pet||!def)return;
       if(pet.away){setTamaMessage(`${pet.name} és d'excursió i no et sent...`);return;}
-      if(getPetStage(pet)==='egg'&&def.xp===0){
-        setTamaMessage('Encara és un ou! Les estrelles i caminar l\'ajuden a eclosionar.');
-        return;
-      }
+      /* Tots els objectes clicables han de poder aplicar-se al Tamagotchi:
+         les galetes alimenten, les pilotes donen felicitat i les estrelles XP. */
       if(!consumeItem(type)){
         setTamaMessage(`No tens cap ${def.name.toLowerCase()}. Troba'n a les rutes!`);
         return;
@@ -2576,16 +2589,14 @@
       const data=await fetchOsrmRoute([start,...wps,start]);
       const route=data.routes[0];
       if(!route||typeof route.distance!=='number')throw new Error('Anella invàlida');
-      const coords=route.geometry&&route.geometry.coordinates;
-      if(!coords||coords.length<4)throw new Error('Geometria d\'anella invàlida');
+      const rawCoords=route.geometry&&route.geometry.coordinates;
+      if(!rawCoords||rawCoords.length<4)throw new Error('Geometria d\'anella invàlida');
       /* Tanca l'anella exactament a l'origen. OSRM ajusta el primer i l'últim
          punt (tots dos l'origen) a trams de carrer segons la direcció
          d'aproximació, de manera que la geometria pot no tornar del tot al punt
          de partida. Forcem que comenci i acabi al mateix lloc on és l'usuari
          perquè la ruta anella acabi on comença. */
-      const originPt=[start.lng,start.lat];
-      coords[0]=[originPt[0],originPt[1]];
-      coords[coords.length-1]=[originPt[0],originPt[1]];
+      const coords=routeWithForcedEndpoints(rawCoords,start,start);
       /* Mantén també la geometria OSRM sincronitzada amb les coordenades
          normalitzades: el mapa natiu rep aquesta geometria i ha de pintar un
          circuit complet, amb l'últim punt exactament igual que el primer. */
@@ -2860,20 +2871,20 @@
         let totalPositiveGainM;
         if(opt.loop){
           /* L'anella ja ve dividida en anada/tornada; no cal recalcular res */
-          outboundCoordinates=opt.outboundCoords;
-          returnCoordinates=opt.returnCoords;
-          previewCoordinates=opt.coords;
+          outboundCoordinates=routeWithForcedEndpoints(opt.outboundCoords,opt.origin,opt.destination);
+          returnCoordinates=routeWithForcedEndpoints(opt.returnCoords,opt.destination,opt.origin);
+          previewCoordinates=routeWithForcedEndpoints(opt.coords,opt.origin,opt.origin);
           totalPositiveGainM=await fetchElevationGain(opt.coords);
           rememberRouteCoords(opt.coords);
         }else{
-          outboundCoordinates=opt.coords;
+          outboundCoordinates=routeWithForcedEndpoints(opt.coords,opt.origin,opt.destination);
           previewCoordinates=outboundCoordinates;
           /* Return route and elevation fetched in parallel */
           const [retCoords,gain]=await Promise.all([
             generateReturnRoute(opt.destination,opt.origin),
             fetchElevationGain(opt.coords)
           ]);
-          returnCoordinates=retCoords||[...opt.coords].reverse();
+          returnCoordinates=routeWithForcedEndpoints(retCoords||[...opt.coords].reverse(),opt.destination,opt.origin);
           totalPositiveGainM=gain;
           /* Recorda la ruta triada perquè les properes generacions evitin
              aquests carrers durant uns dies */
