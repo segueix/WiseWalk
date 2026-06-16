@@ -530,6 +530,9 @@
     let pendingRouteGeneration=false;
     let outboundCoordinates=null;
     let returnCoordinates=null;
+    /* Coordenades que es mostren quan la ruta encara no s'ha iniciat. En mode
+       anella és el circuit complet tancat; en anada/tornada és només l'anada. */
+    let previewCoordinates=null;
     const ARRIVAL_THRESHOLD_M=35;
     const SNAP_DEVIATION_THRESHOLD_M=20;
 
@@ -565,6 +568,7 @@
         const data={};
         if(outboundCoordinates)data.outbound=outboundCoordinates;
         if(returnCoordinates)data.ret=returnCoordinates;
+        if(previewCoordinates)data.preview=previewCoordinates;
         /* Les mètriques (km/desnivell de cada tram) també han de sobreviure a
            un tancament de pantalla: si es perden, els km i les kcal de la
            recompensa es calculen a zero en reclamar. */
@@ -579,6 +583,7 @@
         if(!data)return;
         if(data.outbound&&!outboundCoordinates)outboundCoordinates=data.outbound;
         if(data.ret&&!returnCoordinates)returnCoordinates=data.ret;
+        if(data.preview&&!previewCoordinates)previewCoordinates=data.preview;
         if(data.metrics&&!currentRouteMetrics)currentRouteMetrics=data.metrics;
       }catch(_){}
     }
@@ -913,6 +918,7 @@
       stopWalkTimer();
       stopWalkWatcher();
       walkSession=null;
+      previewCoordinates=null;
       routeCollectibles=[];
       sendCollectiblesToNative([]);
       saveWalkSession();
@@ -2580,6 +2586,10 @@
       const originPt=[start.lng,start.lat];
       coords[0]=[originPt[0],originPt[1]];
       coords[coords.length-1]=[originPt[0],originPt[1]];
+      /* Mantén també la geometria OSRM sincronitzada amb les coordenades
+         normalitzades: el mapa natiu rep aquesta geometria i ha de pintar un
+         circuit complet, amb l'últim punt exactament igual que el primer. */
+      route.geometry.coordinates=coords;
       const split=splitLoopAtFarthest(coords,start);
       const freshness=routeFreshnessPenalty(coords,mem);
       const backtrackM=computeBacktrackMeters(coords);
@@ -2852,10 +2862,12 @@
           /* L'anella ja ve dividida en anada/tornada; no cal recalcular res */
           outboundCoordinates=opt.outboundCoords;
           returnCoordinates=opt.returnCoords;
+          previewCoordinates=opt.coords;
           totalPositiveGainM=await fetchElevationGain(opt.coords);
           rememberRouteCoords(opt.coords);
         }else{
           outboundCoordinates=opt.coords;
+          previewCoordinates=outboundCoordinates;
           /* Return route and elevation fetched in parallel */
           const [retCoords,gain]=await Promise.all([
             generateReturnRoute(opt.destination,opt.origin),
@@ -2874,7 +2886,7 @@
         const timeAtFive=calculateRouteCalories(getCalorieProfile(),totalDistanceKm,totalPositiveGainM,5.0).minutes;
 
         currentRouteMetrics={distanceKm:totalDistanceKm,elevationM:totalPositiveGainM,outboundDistM,returnDistM};
-        sendRouteToNative(outboundCoordinates);
+        sendRouteToNative(previewCoordinates||outboundCoordinates);
         routeCollectibles=spawnRouteCollectibles(outboundCoordinates);
         sendCollectiblesToNative(routeCollectibles);
 
@@ -3042,6 +3054,7 @@
       saveWalkSession();
       setRouteInfoText(`Tornada: ${burnedKcal} kcal · ${formatDecimal(speedKmh.toFixed(1))} km/h.`);
       walkSession=null;
+      previewCoordinates=null;
       routeCollectibles=[];
       sendCollectiblesToNative([]);
       setMapMode(false);
